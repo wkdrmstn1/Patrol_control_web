@@ -1,0 +1,30 @@
+[
+  {
+    "type": "start",
+    "section": "A",
+    "label": "START",
+    "x": 0.1,
+    "y": 0.99
+  },
+  {
+    "type": "waypoint",
+    "section": "A",
+    "label": "A-1",
+    "x": 2.94,
+    "y": 1.04
+  },
+  {
+    "type": "waypoint",
+    "section": "B",
+    "label": "B-1",
+    "x": 2.91,
+    "y": 2.05
+  },
+  {
+    "type": "waypoint",
+    "section": "B",
+    "label": "B-2",
+    "x": 0.03,
+    "y": 1.97
+  }
+]
