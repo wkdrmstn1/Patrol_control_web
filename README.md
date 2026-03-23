@@ -5,7 +5,7 @@
 ---
 
 ## Tech Stack
-
+-> Python(Main - 관제) 및 주행, 객체 감지, 이벤트 저장 등 담당 
 | 분류 | 기술 스택 |
 | :--- | :--- |
 | **Frontend** | React, TypeScript, Tailwind CSS, Lucide-React |
@@ -13,8 +13,6 @@
 | **Robotics** | ROS2 Humble, TurtleBot3, C++ (Detection), Python (Main) | 
 | **Vision** | OpenCV, YOLOv8/DNN, web_video_server |
 | **Security** | bcrypt (Password Hashing), Employee ID Validation |
-
--> Python(Main - 관제) 및 주행, 객체 감지, 이벤트 저장 등 담당 
 ---
 
 ## 핵심 기능 (Key Features)
