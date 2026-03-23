@@ -3,12 +3,12 @@ import { useRobot } from '../contexts/RobotContext';
 import { useState, useEffect } from 'react';
 
 export function StatusBar() {
-  const { status, battery, isCharging, connection, location: robotLocation, isDetectionRunning, isDetectionOn, isFire, isPerson, isIntruder } = useRobot(); 
+  const { status, battery, isCharging, connection, location: robotLocation, isDetectionOn, isFire, isPerson, isIntruder } = useRobot(); 
   const [time, setTime] = useState(new Date());
 
   const displayBattery = Math.min(battery, 100);
   
-  // 💡 [핵심] 연결 안됨 상태를 판별하는 변수 추가
+  // 연결 안됨 상태를 판별하는 변수 추가
   const isOffline = connection === 'Offline' || connection === 'None';
 
   useEffect(() => {
@@ -52,13 +52,13 @@ export function StatusBar() {
   };
 
   const getDetectionStatusColor = () => {
-    if (isFire || isIntruder) return "text-red-500 animate-bounce"; // 위험 상황 강조
+    if (isFire || isIntruder) return "text-red-500 animate-bounce"; 
     if (isPerson) return "text-orange-500";
     return "text-emerald-500";
   };
 
   const getBatteryColor = () => {
-    // 💡 연결 안됨일 때 배터리( -- )도 무조건 빨간색
+    // 연결 안됨일 때 배터리( -- )도 무조건 빨간색
     if (isOffline) return 'text-red-500';
     if (isCharging) return 'text-green-400';
     if (displayBattery > 50) return 'text-green-400';
@@ -67,7 +67,7 @@ export function StatusBar() {
   };
 
   const getStatusColor = () => {
-    // 💡 오프라인 조건을 제일 위로 올려서 '충전 중'보다 우선순위를 높임
+    // 오프라인 조건을 제일 위로 올려서 '충전 중'보다 우선순위를 높임
     if (isOffline) return 'bg-red-500';
     if (isCharging || status === 'charging') return 'bg-green-500';
     
@@ -97,7 +97,7 @@ export function StatusBar() {
           
           {/* 배터리 상태 */}
           <div className="flex items-center gap-3 bg-white/5 px-4 py-2 rounded-lg backdrop-blur-sm border border-white/10">
-            {/* 💡 오프라인이 아닐 때만 충전 애니메이션(bounce) 적용 */}
+            {/* 오프라인이 아닐 때만 충전 애니메이션(bounce) 적용 */}
             {isCharging && !isOffline ? (
               <BatteryCharging className={`size-5 ${getBatteryColor()} animate-bounce`} />
             ) : (
@@ -112,7 +112,6 @@ export function StatusBar() {
           <div className="flex items-center gap-3 bg-white/5 px-4 py-2 rounded-lg backdrop-blur-sm border border-white/10">
             <MapPin className="size-5 text-white" />
             <span className="text-sm text-white font-medium">현재 위치:</span>
-            {/* 💡 오프라인일 때는 파란색이 아닌 흰색 텍스트(text-white)로 렌더링 */}
             <span className={`font-bold ${isOffline ? 'text-white' : 'text-blue-400'}`}>
               {isOffline ? '-- ' : `${robotLocation}`}
             </span>

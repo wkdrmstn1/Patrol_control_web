@@ -11,13 +11,8 @@ import {
   Camera,
   MapPin,
   Navigation,
-  AlertCircle,
-  User,
   Home,
   Zap,
-  Repeat,
-  ShieldCheck, 
-  ShieldOff, 
   AlertTriangle 
 } from 'lucide-react';
 import { ImageWithFallback } from './figma/ImageWithFallback';
@@ -30,7 +25,6 @@ export function MainScreen() {
   const {  
     status,
     mode, 
-    battery, 
     autoMode, 
     setMode, 
     setAutoMode,
@@ -42,7 +36,6 @@ export function MainScreen() {
     toggleDetection,
     plannedPath,
     isVoiceOn,
-    isVoiceRunning,
     toggleVoice
   } = useRobot();
   
@@ -65,7 +58,7 @@ export function MainScreen() {
       .catch(err => console.error("맵 정보 로드 실패:", err));
   }, []);
 
-  // 💡 1. 90도 회전된 지도 전용 마커 위치 계산
+  // 90도 회전된 지도 전용 마커 위치 계산
   const getRobotPixelPos = () => {
     if (mapMeta.width === 0) return { left: '50%', bottom: '50%', opacity: 0 };
     
@@ -73,13 +66,13 @@ export function MainScreen() {
     const yPx = (position.y - mapMeta.origin_y) / mapMeta.resolution;
 
     return {
-      // 90도 회전(CCW) 대응 공식
+      // 90도 회전 대응 
       left: `${(1 - (yPx / mapMeta.width)) * 100}%`,
       bottom: `${(xPx / mapMeta.height) * 100}%`,
     };
   };
 
-  // 💡 2. 90도 회전된 지도 전용 경로(선) 계산
+  // 90도 회전된 지도 전용 경로(선) 계산
   const getPathCoords = (x: number, y: number) => {
     if (mapMeta.width === 0) return { xPct: 50, yPct: 50 };
     
@@ -103,12 +96,10 @@ export function MainScreen() {
     setShowVoiceConfirm(false);
   };
 
-  // 💡 감지 토글 핸들러 (팝업 띄우기)
   const handleDetectionToggleClick = () => {
     setShowDetectionConfirm(true);
   };
 
-  // 💡 실제 감지 ON/OFF 실행
   const confirmDetectionToggle = async () => {
     await toggleDetection(!isDetectionOn);
     setShowDetectionConfirm(false);
@@ -139,16 +130,13 @@ export function MainScreen() {
     try {
       setIsPanoramaMode(true);
 
-      // 1. 촬영 전 가장 최신 로그 ID 확인 (새 사진 구분을 위해)
       const currentLogs = await refreshLogs();
       const lastId = currentLogs.length > 0 ? currentLogs[0].id : '0';
 
-      // 2. Flask 서버에 파노라마 촬영 명령 전송
       await axios.post('http://192.168.0.5:5000/api/robot/command', { 
         command: 'PANORAMA' 
       });
 
-      // 3. PanoramaScreen으로 이동 (이전 ID 전달)
       navigate('/panorama', { state: { lastId } });
       
     } catch (err) {
@@ -164,9 +152,7 @@ export function MainScreen() {
       
       <div className="flex-1 p-6 overflow-auto">
         <div className="max-w-7xl mx-auto space-y-6">
-          {/* Camera and Map Section */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Camera Feed */}
             <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl p-5 border border-white/50">
               <div className="flex items-center gap-2 mb-4">
                 <div className="size-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
@@ -193,14 +179,14 @@ export function MainScreen() {
               </div>
               <div className="relative aspect-[5/4] bg-white rounded-xl overflow-hidden shadow-inner border-2 border-slate-200">
 
-                {/* 1. 배경 지도 (고정) */}
+                {/* 배경 지도 */}
                 <ImageWithFallback
                   src="http://192.168.0.5:5000/map/current_map.jpg" 
                   alt="Real-time Map View"
                   className="w-full h-full object-fill opacity-90" 
                 />
 
-                {/* 💡 2. 파란색 경로 선 (SVG) 레이어 */}
+                {/* 경로(planned_path) */}
                 <svg 
                   className="absolute inset-0 w-full h-full pointer-events-none z-10"
                   viewBox="0 0 100 100" 
@@ -215,9 +201,9 @@ export function MainScreen() {
                         })
                         .join(" ")}
                       fill="none"
-                      stroke="#3b82f6"     // 파란색
-                      strokeWidth="0.8"    // 선 두께
-                      strokeDasharray="2,2" // 점선 효과
+                      stroke="#3b82f6"     
+                      strokeWidth="0.8"    
+                      strokeDasharray="2,2" 
                       className="animate-pulse"
                     />
                   )}
@@ -234,9 +220,7 @@ export function MainScreen() {
                   }}
                 >
                   <div className="relative flex items-center justify-center">
-                    {/* 로봇 모양 아이콘 */}
                     <Navigation className="size-6 text-blue-600 fill-blue-600 drop-shadow-md " />
-                    {/* 핑 애니메이션 */}
                     <span className="absolute size-8 bg-blue-400 rounded-full animate-ping opacity-30"></span>
                   </div>
                 </div>
@@ -246,21 +230,17 @@ export function MainScreen() {
 
           {/* Control Panel */}
           <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl p-6 border border-white/50">
-            
-            {/* 💡 1. 헤더 수정: 제목과 스위치를 양 끝으로 배치 */}
             <div className="flex items-center justify-between mb-6">
               <h2 className="font-bold text-lg text-slate-800">제어 패널</h2>
-              
-              {/* 스위치들을 한데 묶는 컨테이너 */}
               <div className="flex items-center gap-4">
                 
-                {/* 음성 인식 토글 스위치 */}
+                {/* 음성 인식 스위치 */}
                 <div className="flex items-center gap-3 bg-slate-50 px-3 py-1.5 rounded-2xl border border-slate-100">
                   <span className={`text-xs font-bold transition-colors ${isVoiceOn ? 'text-emerald-600' : 'text-slate-400'}`}>
                     음성 인식 {isVoiceOn ? 'ON' : 'OFF'}
                   </span>
                   <button
-                    onClick={handleVoiceToggleClick} // 확인 팝업 출력용 핸들러
+                    onClick={handleVoiceToggleClick} 
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus:outline-none shadow-inner
                       ${isVoiceOn ? 'bg-emerald-500' : 'bg-slate-300'}`}
                   >
@@ -271,7 +251,7 @@ export function MainScreen() {
                   </button>
                 </div>
 
-                {/* 객체 감지 토글 스위치 */}
+                {/* 객체 감지 스위치 */}
                 <div className="flex items-center gap-3 bg-slate-50 px-3 py-1.5 rounded-2xl border border-slate-100">
                   <span className={`text-xs font-bold transition-colors ${isDetectionOn ? 'text-emerald-600' : 'text-slate-400'}`}>
                     객체 감지 {isDetectionOn ? 'ON' : 'OFF'}
@@ -290,11 +270,9 @@ export function MainScreen() {
                 
               </div>
             </div>
-
-            {/* 💡 3. 기존 버튼 그리드 (6개 유지) */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
               
-              {/* Auto Mode Toggle */}
+              {/* Auto Mode 스위치 */}
               <div className="space-y-2">
                 <button
                   onClick={handleAutoToggle}
@@ -370,8 +348,6 @@ export function MainScreen() {
                 {isPanoramaMode ? '촬영중' : '파노라마'}
               </button>
             </div>
-
-            {/* 하단 경로/대기 버튼 2개 */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
               <button
                 onClick={() => setShowRouteSettings(true)}
@@ -395,7 +371,7 @@ export function MainScreen() {
         </div>
       </div>
 
-      {/* 💡 [해결 2] 객체 감지 확인 모달 렌더링 코드 추가 */}
+      {/* 객체 감지 상태 */}
       {showDetectionConfirm && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-8 text-center animate-in fade-in zoom-in duration-200">
@@ -414,6 +390,7 @@ export function MainScreen() {
         </div>
       )}
 
+      {/* 음성 인식 상태 */}
       {showVoiceConfirm && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-8 text-center animate-in fade-in zoom-in duration-200">

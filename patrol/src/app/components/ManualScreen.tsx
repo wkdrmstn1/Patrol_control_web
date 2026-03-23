@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { StatusBar } from './StatusBar';
-import { Home, Keyboard, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, StopCircle, Loader2, Camera } from 'lucide-react';
+import { Home, Keyboard, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, StopCircle } from 'lucide-react';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { useRobot } from '../contexts/RobotContext';
 
@@ -11,7 +11,7 @@ export function ManualScreen() {
   const { setMode } = useRobot();
   const [showKeyboard, setShowKeyboard] = useState(false);
   const [activeKey, setActiveKey] = useState<string | null>(null);
-  const activeKeyRef = useRef<string | null>(null); // 💡 이미 선언하신 변수 사용
+  const activeKeyRef = useRef<string | null>(null); 
 
   const sendCommand = async (action: string) => {
     try {
@@ -27,11 +27,11 @@ export function ManualScreen() {
       e.preventDefault();
     }
     
-    // 💡 핵심: 이미 누른 키가 있다면 중복 처리 방지
+    // 이미 누른 키가 있다면 중복 처리 방지
     if (activeKeyRef.current !== null) return;
 
     const lowerKey = e.key.toLowerCase();
-    activeKeyRef.current = lowerKey; // 💡 Ref에 현재 누른 키 등록
+    activeKeyRef.current = lowerKey; // Ref에 현재 누른 키 등록
 
     switch (lowerKey) {
       case 'w': setActiveKey('up'); sendCommand('FORWARD'); break;
@@ -40,18 +40,17 @@ export function ManualScreen() {
       case 'd': setActiveKey('right'); sendCommand('RIGHT'); break;
       case ' ': setActiveKey('stop'); sendCommand('STOP'); break;
     }
-  }, []); // 💡 의존성 배열 비움 (Ref 사용으로 함수 고정)
+  }, []); // 의존성 배열 비움 (Ref 사용으로 함수 고정)
 
   const handleKeyUp = useCallback((e: KeyboardEvent) => {
     const lowerKey = e.key.toLowerCase();
     
-    // 💡 핵심: 내가 누른 키를 뗄 때만 실행 (Ref 사용으로 activeKey 의존성 제거)
+    // 내가 누른 키를 뗄 때만 실행 (Ref 사용으로 activeKey 의존성 제거)
     if (activeKeyRef.current === lowerKey) {
-      activeKeyRef.current = null; // Ref 초기화
-      setActiveKey(null);
+      activeKeyRef.current = null; 
       sendCommand('STOP');
     }
-  }, []); // 💡 의존성 배열 비움 (함수가 새로 생성되지 않음)
+  }, []); // 의존성 배열 비움 (함수가 새로 생성되지 않음)
 
   const handleExit = async () => {
     await sendCommand('STOP');
@@ -72,7 +71,6 @@ export function ManualScreen() {
       }
       setMode('stopped');
     };
-    // 💡 handleKeyDown, handleKeyUp이 이제 고정되었으므로 이 이펙트는 한 번만 실행됨
   }, [handleKeyDown, handleKeyUp, setMode]);
 
   return (

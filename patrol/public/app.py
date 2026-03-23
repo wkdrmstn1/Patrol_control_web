@@ -35,7 +35,7 @@ current_map_meta = {
     "height": 0
 }
 
-# DB(SQL) 설정 - 사용자 정보 유지
+# DB(SQL) 설정 
 db_config = {
     'host': 'localhost',
     'user': 'root',
@@ -48,7 +48,7 @@ db_config = {
 def get_db_connection():
     return pymysql.connect(**db_config)
 
-# 로봇 상태 데이터 유지
+# 로봇 상태 데이터 
 robot_data = {
     'battery': 0,
     'drive_status': 'IDLE',
@@ -64,32 +64,9 @@ robot_data = {
     'isIntruder': False
 }
 
-""" # 리눅스로 이사 할때 
-@app.route('/api/start_main', methods=['POST'])
-def start_robot_nodes():
-    try:
-        print(">>> [웹 명령 수신] 로봇 노드들을 가동합니다!")
-        
-        # 1️⃣ 파이썬 main.py 실행 명령어 
-        cmd_main = "python3 /home/cho/jgs_ws/jgs_ws/main.py"
-        
-        # 2️⃣ C++ 객체감지 노드 실행 명령어 
-        # (ROS2 setup.bash를 source 하고 패키지를 실행해야 합니다)
-        cmd_cpp = "source /opt/ros/humble/setup.bash && source /home/cho/lch_ws/install/setup.bash && ros2 run pt_pkg test_detection"
-        
-        # subprocess.Popen을 쓰면 백그라운드에서 실행되므로 Flask가 멈추지 않습니다.
-        subprocess.Popen(cmd_main, shell=True, executable='/bin/bash')
-        subprocess.Popen(cmd_cpp, shell=True, executable='/bin/bash')
-        
-        return jsonify({"status": "success", "message": "로봇 노드 실행 완료!"}), 200
-
-    except Exception as e:
-        print(f"노드 실행 실패: {e}")
-        return jsonify({"error": str(e)}), 500
-"""
 
 ############################## 지도 #######################
-# 1. [로봇 -> 서버] 지도 이미지 및 메타데이터 업로드 수신
+# [로봇 -> 서버] 지도 이미지 및 메타데이터 업로드 수신
 @app.route('/api/map/upload', methods=['POST'])
 def upload_map():
     global current_map_meta
@@ -112,12 +89,12 @@ def upload_map():
 
     return jsonify({"status": "success"})
 
-# 2. [웹 -> 서버] 웹에서 지도 이미지를 불러올 때 사용하는 주소
+# [웹 -> 서버] 웹에서 지도 이미지를 불러올 때 사용하는 주소
 @app.route('/map/current_map.jpg')
 def serve_current_map():
     return send_from_directory(MAP_FOLDER, 'current_map.jpg')
 
-# 3. [웹 -> 서버] 클릭 좌표 계산을 위해 웹이 메타데이터를 요구할 때
+# [웹 -> 서버] 클릭 좌표 계산을 위해 웹이 메타데이터를 요구할 때
 @app.route('/api/map/meta', methods=['GET'])
 def get_map_meta():
     return jsonify(current_map_meta)
@@ -134,7 +111,7 @@ def serve_image(filename):
 def serve_panorama(filename):
     return send_from_directory(PANORAMA_FOLDER, filename)
 
-# 파노라마 이미지 업로드 
+# [파노라마 저장 API] 
 @app.route('/api/panorama/upload', methods=['POST'])
 def upload_panorama():
     if 'image' not in request.files:
@@ -142,15 +119,15 @@ def upload_panorama():
     
     file = request.files['image']
     
-    # 1. 파일명 생성 및 파노라마 전용 폴더 저장
+    # 파일명 생성 및 파노라마 전용 폴더 저장
     filename = f"PANO_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
     filepath = os.path.join(PANORAMA_FOLDER, filename)
     file.save(filepath)
 
-    # 2. 이미지 URL 생성 (로컬망 IP 사용)
+    # 이미지 URL 생성
     image_url = f"http://192.168.0.5:5000/panorama/{filename}"
 
-    # 3. [핵심] 기존 patrol_logs 테이블에 "파노라마 촬영" 상황으로 저장
+    # "파노라마 촬영" 상황으로 저장
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
@@ -158,7 +135,6 @@ def upload_panorama():
             INSERT INTO patrol_logs (situation, position, image_path, created_at) 
             VALUES (%s, %s, %s, %s)
             """
-            # situation을 "파노라마 촬영"으로 고정하여 웹에서 구분 가능하게 함
             cursor.execute(sql, ("파노라마 촬영", "수동 조작 지점", image_url, datetime.now()))
         connection.commit()
         return jsonify({"status": "success", "url": image_url}), 200
@@ -168,7 +144,7 @@ def upload_panorama():
     finally:
         connection.close()
 
-# 로그 히스토리 
+#[로그 히스토리 저장 API]
 @app.route('/api/logs', methods=['POST'])
 def save_log():
     # 로봇이 보낸 파일 받기
@@ -177,7 +153,7 @@ def save_log():
         situation = request.form.get('situation', '알 수 없는 상황')
         position = request.form.get('position', '위치 미상')
         
-        # 💡 1. 상황(situation)에 따라 저장 폴더와 URL, 파일명 분기 처리
+        # 상황(situation)에 따라 저장 폴더와 URL, 파일명 분기 처리
         if '파노라마' in situation:
             filename = f"PANO_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
             filepath = os.path.join(PANORAMA_FOLDER, filename)
@@ -187,10 +163,10 @@ def save_log():
             filepath = os.path.join(UPLOAD_FOLDER, filename)
             image_url = f"http://192.168.0.5:5000/uploads/{filename}"
             
-        # 실제 폴더에 사진 저장
+        # 폴더에 사진 저장
         file.save(filepath)
         
-        # 2. MySQL DB에 로그 정보 저장
+        # MySQL DB에 로그 정보 저장
         connection = get_db_connection()
         try:
             with connection.cursor() as cursor:
@@ -215,7 +191,7 @@ def save_log():
     
     return jsonify({"status": "fail"}), 400
 
-# [API] 로그 히스토리 조회 + 파노라마 
+# [파노라마,로그 히스토리 조회 API]
 @app.route('/api/logs', methods=['GET'])
 def get_logs():
     connection = get_db_connection()
@@ -244,13 +220,13 @@ def get_logs():
     finally:
         connection.close()
     
-# [API] 로그 삭제 -> admin으로 로그인 했을 때만 가능 
+# [로그삭제 API] -> admin으로 로그인 했을 때만 가능 
 @app.route('/api/logs/<int:log_id>', methods=['DELETE'])
 def delete_log(log_id):
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
-            # 1. 삭제 전 이미지 경로 조회 (실제 파일 삭제용)
+            # 삭제 전 이미지 경로 조회 (실제 파일 삭제용)
             cursor.execute("SELECT image_path FROM patrol_logs WHERE id = %s", (log_id,))
             row = cursor.fetchone()
             
@@ -265,7 +241,7 @@ def delete_log(log_id):
                 if os.path.exists(filepath):
                     os.remove(filepath)
 
-            # 2. DB 레코드 삭제
+            # DB 레코드 삭제
             sql = "DELETE FROM patrol_logs WHERE id = %s"
             cursor.execute(sql, (log_id,))
             
@@ -276,42 +252,6 @@ def delete_log(log_id):
         return jsonify({"status": "error", "message": str(e)}), 500
     finally:
         connection.close()
-
-
-
-# 카메라 cpu 터질라해서 잠정 보류 
-'''
-@app.route('/api/video/upload', methods=['POST'])  # 카메라 데이터 수신
-def upload_video():
-    global current_frame
-    file = request.data                             # 바이트 상태 그대로 이미지 가져오기 
-    nparr = np.frombuffer(file, np.uint8)           # 그대로 가져온 이미지(바이트)를 숫자 행렬로 변환
-    current_frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)   # opencv 가 처리 할 수 있는 이미지 행렬로 변환
-    return '', 204   # 확인 대답 생략 
-
-def gen_frames():
-    while True:
-        if current_frame is not None:               # current_frame 의 최신 사진 데이터 확인
-            # 처리된 이미지를 jpg 형태로 압축 (프레임 생성)
-            ret, buffer = cv2.imencode('.jpg', current_frame)
-            
-            if not ret:
-                continue
-                
-            frame = buffer.tobytes()
-            
-            # 새로운 사진(프레임) 시작 알림 -> 웹으로 사진(프레임)들 계속 보내기
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
-        else:
-            # 사진 데이터가 아직 없으면 잠시 대기 (브라우저 멈춤 방지)
-            import time
-            time.sleep(0.1)
-
-@app.route('/api/video_feed')               
-def video_feed():
-    return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
-'''
 
 # [웹 -> 서버] 명령 수신 (POST)
 @app.route('/api/robot/command', methods=['POST'])
@@ -336,7 +276,7 @@ def receive_command():
     current_command_data = data
     return jsonify({"status": "success"})
 
-# 이전에 설정한 웨이포인트 불러오기
+# [이전에 설정한 경로 불러오기 API]
 @app.route('/api/map/waypoints', methods=['GET'])
 def get_saved_waypoints():
     try:
@@ -392,7 +332,7 @@ def update_robot_status():
         print(f">>> [로봇 상태 갱신] 배터리: {robot_data['battery']}%, 상태: {robot_data['drive_status']}")
     return jsonify({"status": "success"})
 
-# [API] 로봇 수동 조작 
+# [로봇 수동 조작 API] 
 @app.route('/api/robot/manual', methods=['POST'])
 def manual_control():
     global current_command
@@ -407,7 +347,7 @@ def manual_control():
     return jsonify({"status": "success"})
 
 
-# [API] 로봇 상태 조회 react -> flask
+# [로봇 상태 조회 API] react -> flask
 @app.route('/api/robot/status', methods=['GET'])
 def get_robot_status():
     global robot_data, last_heartbeat
@@ -508,12 +448,12 @@ def login():
     try:
         conn = get_db_connection()
         with conn.cursor() as cursor:
-            # 1. DB에서 해당 사원증 번호(employee_id)를 가진 유저 조회
+            # DB에서 해당 사원증 번호(employee_id)를 가진 유저 조회
             sql = "SELECT * FROM users WHERE employee_id = %s"
             cursor.execute(sql, (user_id,))
             user = cursor.fetchone()
 
-            # 2. 유저가 존재하고, 입력한 비밀번호가 DB의 암호화된 비밀번호와 일치하는지 검증
+            # 유저가 존재하고, 입력한 비밀번호가 DB의 암호화된 비밀번호와 일치하는지 검증
             if user and bcrypt.checkpw(password.encode('utf-8'), user['password'].encode('utf-8')):
                 return jsonify({
                     "result": "success",
@@ -523,7 +463,7 @@ def login():
                     }
                 }), 200
             else:
-                # 3. 아이디가 없거나 비밀번호가 틀린 경우
+                # 아이디가 없거나 비밀번호가 틀린 경우
                 return jsonify({"error": "아이디 또는 비밀번호가 올바르지 않습니다."}), 401
     except Exception as e:
         print(f"Login Error: {e}")

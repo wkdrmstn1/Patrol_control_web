@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRobot } from '../contexts/RobotContext';
-import { X, MapPin, Flag, Home, Navigation, ArrowUp, ArrowDown, Settings2 } from 'lucide-react';
+import { X, MapPin, Home, Navigation, ArrowUp, ArrowDown, Settings2 } from 'lucide-react';
 import axios from 'axios';
 
 interface RouteSettingModalProps {
@@ -28,7 +28,6 @@ export function RouteSettingModal({ onClose }: RouteSettingModalProps) {
   const isDraggingRef = useRef(false);
   const [showOrderModal, setShowOrderModal] = useState(false); 
 
-  // 💡 1. 맵 메타데이터 & 이전 경로 불러오는 부분 (useEffect)
   useEffect(() => {
     const initData = async () => {
       try {
@@ -67,7 +66,6 @@ export function RouteSettingModal({ onClose }: RouteSettingModalProps) {
     return () => clearInterval(interval);
   }, []);
 
-  // 💡 2. 밖으로 빼낸 핵심 함수들
   const getLabeledPoints = () => {
     let aCount = 1;
     let bCount = 1;
@@ -92,7 +90,7 @@ export function RouteSettingModal({ onClose }: RouteSettingModalProps) {
   };
 
 
-  // 📍 1. 지도 빈 곳 클릭 시
+  // 지도 빈 곳 클릭 시
   const handleMapClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (isDraggingRef.current) return;
     if (activeMenuId) { setActiveMenuId(null); return; }
@@ -110,10 +108,10 @@ export function RouteSettingModal({ onClose }: RouteSettingModalProps) {
     setPoints([...points, newPoint]);
   };
 
-  // 마커 누름 (드래그 시작점)
+  // 마커 눌렀을때
   const handlePointerDown = (e: React.PointerEvent, id: string) => {
     if (e.button !== 0) return; // 왼쪽 클릭만 허용
-    e.stopPropagation(); // 지도로 클릭 이벤트 전파 방지
+    e.stopPropagation(); 
 
     setDraggingId(id);
     isDraggingRef.current = false; // 드래그 여부 초기화
@@ -121,7 +119,7 @@ export function RouteSettingModal({ onClose }: RouteSettingModalProps) {
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
   };
 
-  // 🖱️ 3. 드래그 중
+  // 마커 드래그 
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!draggingId) return;
     
@@ -140,7 +138,7 @@ export function RouteSettingModal({ onClose }: RouteSettingModalProps) {
     setPoints(points.map(p => p.id === draggingId ? { ...p, x, y } : p));
   };
 
-  // 🖱️ 4. 마커 뗌 (드래그 종료)
+  // 마커 드래그 종료 
   const handlePointerUp = (e: React.PointerEvent) => {
     if (draggingId) {
       e.stopPropagation();
@@ -152,7 +150,7 @@ export function RouteSettingModal({ onClose }: RouteSettingModalProps) {
     }
   };
 
-  // 💡 [핵심] 5. 마커 더블 클릭 시 메뉴 토글
+  // 마커 더블 클릭 시 메뉴 토글
   const handleMarkerDoubleClick = (e: React.MouseEvent, id: string) => {
     e.stopPropagation(); // 지도의 클릭 이벤트 방지
     setActiveMenuId(prev => prev === id ? null : id);
@@ -187,7 +185,7 @@ export function RouteSettingModal({ onClose }: RouteSettingModalProps) {
     if (startPoint) orderedPoints.push(startPoint);
     orderedPoints.push(...waypoints);
 
-    // 💡 [수정] 90도 회전 역산 공식 정교화
+    // 90도 회전 역산 공식 정교화
     const realCoordinates = labeledPoints.map(p => {
       const original_yPx = (1 - (p.x / 100)) * mapMeta.width; 
       const original_xPx = (1 - (p.y / 100)) * mapMeta.height; 
@@ -196,8 +194,8 @@ export function RouteSettingModal({ onClose }: RouteSettingModalProps) {
 
       return { 
         type: p.type, 
-        section: p.section, // 추가
-        label: p.label,     // 동적 라벨(A-1 등) 추가
+        section: p.section, 
+        label: p.label,     
         x: parseFloat(realX.toFixed(2)), 
         y: parseFloat(realY.toFixed(2)) 
       };
@@ -211,7 +209,7 @@ export function RouteSettingModal({ onClose }: RouteSettingModalProps) {
         waypoints: realCoordinates
       });
 
-      // 💡 [중요] 퍼센트(p.x)가 아니라 계산된 실제 좌표(realX)를 저장해야 파노라마 오차가 안 납니다!
+      // 계산된 실제 좌표(realX)를 저장하여 파노라마 오차 제거 
       setRoutePoints(realCoordinates.map(p => ({ x: p.x, y: p.y, label: p.label })));
 
       alert("경로가 전송되었습니다.");
@@ -264,9 +262,9 @@ export function RouteSettingModal({ onClose }: RouteSettingModalProps) {
             />
             
             <svg className="absolute inset-0 w-full h-full pointer-events-none z-10">
-              {labeledPoints.map((point, index) => { // 💡 수정 후
+              {labeledPoints.map((point, index) => { 
                 if (index === labeledPoints.length - 1) return null;
-                const nextPoint = labeledPoints[index + 1]; // 💡 수정 후
+                const nextPoint = labeledPoints[index + 1]; 
                 return (
                   <line
                     key={`line-${point.id}`}
@@ -291,7 +289,7 @@ export function RouteSettingModal({ onClose }: RouteSettingModalProps) {
                   <div 
                     onPointerDown={(e) => handlePointerDown(e, point.id)}
                     onDoubleClick={(e) => handleMarkerDoubleClick(e, point.id)}
-                    onClick={(e) => e.stopPropagation()} // 클릭 시 지도에 점 추가 방지
+                    onClick={(e) => e.stopPropagation()} 
                     className="cursor-grab active:cursor-grabbing"
                   >
                     {point.type === 'start' && (

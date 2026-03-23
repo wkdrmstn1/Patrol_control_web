@@ -32,7 +32,7 @@ export function PanoramaScreen() {
     return () => clearInterval(checkInterval);
   }, [lastId, refreshLogs]);
 
-  // --- [A] 촬영 중 대기 화면 
+  // 촬영 중 대기 화면 
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-white">
@@ -43,7 +43,7 @@ export function PanoramaScreen() {
     );
   }
 
-  // --- [B] 촬영 완료 화면 
+  // 촬영 완료 화면 (시간 위치 포함)
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 flex flex-col">
       <div className="flex-1 flex items-center justify-center p-8">

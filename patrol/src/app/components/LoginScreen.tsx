@@ -1,37 +1,36 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import axios from 'axios'; // API 통신을 위해 추가
+import axios from 'axios'; 
 import { useAuth } from '../contexts/AuthContext';
 import { Lock, User, Bot, CreditCard } from 'lucide-react';
 
 export function LoginScreen() {
-  const [username, setUsername] = useState(''); // 사원증 번호가 입력됨
+  const [username, setUsername] = useState(''); 
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const navigate = useNavigate();
-  const { login: setAuthUser } = useAuth(); // AuthContext의 login 함수 이름을 구분하기 위해 변경
+  const { login: setAuthUser } = useAuth(); 
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
     try {
-      // 1. Flask 서버로 로그인 요청 전송
+      // Flask 서버로 로그인 요청 전송
       const response = await axios.post('http://192.168.0.5:5000/api/login', {
-        userId: username, // 아이디 칸에 입력한 사원증 번호
+        userId: username, 
         password: password
       });
 
       if (response.status === 200) {
-        // 2. 로그인 성공 시 AuthContext에 유저 정보 저장
-        // response.data.user 에는 {userId, employeeId} 등이 들어있음
+        // 로그인 성공 시 AuthContext에 유저 정보 저장
         setAuthUser(response.data.user);
         
-        // 3. 메인 화면으로 이동
+        // 메인 화면으로 이동
         navigate('/standby');
       }
     } catch (err: any) {
-      // 4. 백엔드에서 보낸 에러 메시지 처리 (401: 비번 틀림 등)
+      // 백엔드에서 보낸 에러 메시지 처리 (401: 비번 틀림 등)
       const errorMessage = err.response?.data?.error || '로그인 서버 연결에 실패했습니다.';
       setError(errorMessage);
     }
@@ -65,7 +64,6 @@ export function LoginScreen() {
               사원증 번호 (ID)
             </label>
             <div className="relative group">
-              {/* 아이콘을 CreditCard로 변경하여 사원증 느낌 강조 */}
               <CreditCard className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-slate-400 group-focus-within:text-blue-600 transition-colors" />
               <input
                 type="text"
