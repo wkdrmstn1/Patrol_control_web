@@ -1,3 +1,5 @@
+/* loghistorymodal */
+
 import { useState } from 'react';
 import { useRobot } from '../contexts/RobotContext';
 import { X, Eye, History, Trash2, CheckSquare, Square } from 'lucide-react';
@@ -18,7 +20,7 @@ export function LogHistoryModal({ onClose }: LogHistoryModalProps) {
   const loggedInUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
   const isAdmin = loggedInUser.employee_id === 'admin';
 
-  // 💡 1. 전체 선택/해제 토글
+  // 전체 선택/해제 토글
   const toggleSelectAll = () => {
     if (selectedIds.length === logs.length) {
       setSelectedIds([]);
@@ -27,14 +29,14 @@ export function LogHistoryModal({ onClose }: LogHistoryModalProps) {
     }
   };
 
-  // 💡 2. 개별 선택 토글
+  // 개별 선택 토글
   const toggleSelectOne = (id: string) => {
     setSelectedIds(prev => 
       prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
     );
   };
 
-  // 💡 3. 선택 삭제 실행
+  // 선택 삭제 실행
   const handleDeleteSelected = async () => {
     if (selectedIds.length === 0) return;
     if (!window.confirm(`선택한 ${selectedIds.length}개의 로그를 영구 삭제하시겠습니까?`)) return;
@@ -42,7 +44,7 @@ export function LogHistoryModal({ onClose }: LogHistoryModalProps) {
     try {
       // 병렬로 삭제 요청 전송
       await Promise.all(
-        selectedIds.map(id => axios.delete(`http://192.168.0.5:5000/api/logs/${id}`))
+        selectedIds.map(id => axios.delete(`http://192.168.0.24:5000/api/logs/${id}`))
       );
       
       setSelectedIds([]); // 선택 초기화
@@ -59,8 +61,8 @@ export function LogHistoryModal({ onClose }: LogHistoryModalProps) {
     if (!window.confirm("이 로그를 영구적으로 삭제하시겠습니까?")) return;
 
     try {
-      // 서버 IP 주소는 192.168.0.5 로 통일 (본인 환경에 맞게 수정)
-      await axios.delete(`http://192.168.0.5:5000/api/logs/${logId}`);
+      // 서버 IP 주소는 192.168.0.24 로 통일 (본인 환경에 맞게 수정)
+      await axios.delete(`http://192.168.0.24:5000/api/logs/${logId}`);
       
       // 삭제 후 Context의 로그 목록을 최신화합니다.
       await refreshLogs();
@@ -73,13 +75,8 @@ export function LogHistoryModal({ onClose }: LogHistoryModalProps) {
 
   return (
     <>
-      {/* 모달 전체 배경 오버레이 */}
       <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[100] flex items-center justify-center p-4">
-        
-        {/* 모달 컨테이너 */}
         <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-6xl w-full max-h-[85vh] flex flex-col overflow-hidden border border-white/20 animate-in fade-in zoom-in duration-300">
-          
-          {/* 헤더 섹션 */}
           <div className="flex items-center justify-between p-8 border-b border-slate-100 bg-slate-50/50">
             <div className="flex items-center gap-4">
               <div className="size-14 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg">
@@ -110,7 +107,6 @@ export function LogHistoryModal({ onClose }: LogHistoryModalProps) {
             )}
           </div>
 
-          {/* 테이블 섹션 (데이터 리스트) */}
           <div className="flex-1 overflow-auto p-8 bg-white font-['Pretendard']">
             <table className="w-full text-left border-separate border-spacing-y-3">
               <thead>
@@ -132,16 +128,14 @@ export function LogHistoryModal({ onClose }: LogHistoryModalProps) {
                 {logs.length > 0 ? (
                   logs.map((log) => {
                     console.log("실제 로그 데이터 구조:", log);
-                    // 상황 설명에 '파노라마'가 포함되어 있는지 확인
                     const isFire = log.situation.includes('화재');
                     const isIntruder = log.situation.includes('침입자');
+                    const isTheft = log.situation.includes('도난');
                     const isPano = log.situation.includes('파노라마');
                     const isSelected = selectedIds.includes(log.id);
 
                     return (
-                      <tr key={log.id} className={`group transition-all duration-200 ${isSelected ? 'bg-indigo-50/50' : isPano ? 'bg-orange-50/50' : (isFire || isIntruder) ? 'bg-red-50/50' : 'hover:bg-slate-50/80'}`}>
-                        
-                        {/* 💡 [추가] 개별 선택 체크박스 열 */}
+                      <tr key={log.id} className={`group transition-all duration-200 ${isSelected ? 'bg-indigo-50/50' : isPano ? 'bg-orange-50/50' : (isFire || isIntruder || isTheft) ? 'bg-red-50/50' : 'hover:bg-slate-50/80'}`}>
                         <td className="px-6 py-5 text-center">
                           <button onClick={() => toggleSelectOne(log.id)} className="transition-colors">
                             {isSelected 
@@ -150,33 +144,32 @@ export function LogHistoryModal({ onClose }: LogHistoryModalProps) {
                           </button>
                         </td>
 
-                        {/* 1. 시간 */}
+                        {/* 시간 */}
                         <td className="px-6 py-5 text-sm text-slate-500 font-bold font-mono">
                           {log.time}
                         </td>
 
-                        {/* 2. 상황 (배지 디자인) */}
+                        {/* 상황 */}
                         <td className="px-6 py-5">
-                          {/* 💡 [수정] 각 상황별 고유 색상 배정 및 화재 애니메이션(pulse) 제거 */}
                           <span className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black border-2 shadow-sm transition-all ${
-                            isFire 
-                              ? 'border-red-600 bg-red-600 text-white' // 화재: 빨강
+                            (isFire || isTheft) 
+                              ? 'border-red-600 bg-red-600 text-white' 
                             : isIntruder 
-                              ? 'border-rose-700 bg-rose-700 text-white' // 침입자: 진한 장미색
+                              ? 'border-rose-700 bg-rose-700 text-white' 
                             : isPano 
-                              ? 'border-orange-500 bg-white text-orange-600' // 파노라마: 주황 테두리
-                            : 'border-slate-200 bg-slate-100 text-slate-500' // 사람/기타: 무난한 회색
+                              ? 'border-orange-500 bg-white text-orange-600' 
+                            : 'border-slate-200 bg-slate-100 text-slate-500' 
                           }`}>
                             {isPano ? '📸 파노라마 촬영' : log.situation}
                           </span>
                         </td>
 
-                        {/* 3. 위치 */}
+                        {/* 위치 */}
                         <td className="px-6 py-5 text-sm text-slate-700 font-bold italic tracking-wide">
                           {log.position === 'S' ? 'START' : log.position}
                         </td>
 
-                        {/* 4. 액션 버튼 (이미지 보기 / 삭제) */}
+                        {/* 이미지 보기 / 삭제 */}
                         <td className="px-6 py-5">
                           <div className="flex items-center justify-center gap-3">
                       
@@ -184,10 +177,10 @@ export function LogHistoryModal({ onClose }: LogHistoryModalProps) {
                               <button
                                 onClick={() => setSelectedImage(log.imageUrl)}
                                 className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all shadow-md active:scale-95 text-white ${
-                                  isFire ? 'bg-red-600 hover:bg-red-700 shadow-red-100'
+                                  (isFire || isTheft) ? 'bg-red-600 hover:bg-red-700 shadow-red-100'
                                   : isIntruder ? 'bg-purple-700 hover:bg-purple-800 shadow-purple-100'
                                   : isPano ? 'bg-orange-500 hover:bg-orange-600 shadow-orange-100'
-                                  : 'bg-slate-800 hover:bg-slate-900 shadow-slate-200' // 사람: 기본 검정색
+                                  : 'bg-slate-800 hover:bg-slate-900 shadow-slate-200' 
                                 }`}
                               >
                                 <Eye className="size-4" />
@@ -212,7 +205,6 @@ export function LogHistoryModal({ onClose }: LogHistoryModalProps) {
             </table>
           </div>
 
-          {/* 푸터 섹션 */}
           <div className="p-8 border-t border-slate-100 bg-slate-50/50">
             <button
               onClick={onClose}
@@ -224,7 +216,6 @@ export function LogHistoryModal({ onClose }: LogHistoryModalProps) {
         </div>
       </div>
 
-      {/* 이미지 확대 모달 */}
       {selectedImage && (
         <ImageModal imageUrl={selectedImage} onClose={() => setSelectedImage(null)} />
       )}

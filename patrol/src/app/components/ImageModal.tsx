@@ -1,3 +1,5 @@
+/* imagemodal */
+
 import { X, Image as ImageIcon } from 'lucide-react';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 

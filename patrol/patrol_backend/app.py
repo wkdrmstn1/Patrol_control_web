@@ -1,12 +1,23 @@
-from flask import Flask, Response, request, jsonify, send_from_directory
+# app.py
+
+# camera cmd 
+## ros2 run web_video_server web_video_server
+## ros2 run pt_pkg test_detection
+
+
+
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import pymysql
 import bcrypt
 import json
-import numpy as np
 import os
+import threading
 from datetime import datetime 
 
+state_lock = threading.Lock()
+cmd_lock = threading.Lock()
+map_lock = threading.Lock()
 
 current_frame = None
 current_command = None
@@ -14,14 +25,16 @@ current_command_data = None
 last_heartbeat = datetime.now()
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 WAYPOINTS_FILE = '/tmp/last_waypoints.json'
 
 # 폴더 설정
-MAP_FOLDER = 'uploads/map'
-UPLOAD_FOLDER = 'uploads'
-PANORAMA_FOLDER = 'uploads/panorama'
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+MAP_FOLDER = os.path.join(BASE_DIR, 'uploads', 'map')
+UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
+PANORAMA_FOLDER = os.path.join(BASE_DIR, 'uploads', 'panorama')
 os.makedirs(MAP_FOLDER, exist_ok=True)
 os.makedirs(PANORAMA_FOLDER, exist_ok=True)
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -39,7 +52,7 @@ current_map_meta = {
 db_config = {
     'host': 'localhost',
     'user': 'root',
-    'password': '20011030', 
+    'password': '1234', 
     'db': 'patrol_db',
     'charset': 'utf8mb4',
     'cursorclass': pymysql.cursors.DictCursor
@@ -61,32 +74,11 @@ robot_data = {
     'planned_path': [],
     'isFire': False,
     'isPerson': False,
-    'isIntruder': False
+    'isIntruder': False,
+    'isTheft': False,
+    'isFireDetectionOn': False,
+    'isPersonDetectionOn': False
 }
-
-""" # 리눅스로 이사 할때 
-@app.route('/api/start_main', methods=['POST'])
-def start_robot_nodes():
-    try:
-        print(">>> [웹 명령 수신] 로봇 노드들을 가동합니다!")
-        
-        # 1️⃣ 파이썬 main.py 실행 명령어 
-        cmd_main = "python3 /home/cho/jgs_ws/jgs_ws/main.py"
-        
-        # 2️⃣ C++ 객체감지 노드 실행 명령어 
-        # (ROS2 setup.bash를 source 하고 패키지를 실행해야 합니다)
-        cmd_cpp = "source /opt/ros/humble/setup.bash && source /home/cho/lch_ws/install/setup.bash && ros2 run pt_pkg test_detection"
-        
-        # subprocess.Popen을 쓰면 백그라운드에서 실행되므로 Flask가 멈추지 않습니다.
-        subprocess.Popen(cmd_main, shell=True, executable='/bin/bash')
-        subprocess.Popen(cmd_cpp, shell=True, executable='/bin/bash')
-        
-        return jsonify({"status": "success", "message": "로봇 노드 실행 완료!"}), 200
-
-    except Exception as e:
-        print(f"노드 실행 실패: {e}")
-        return jsonify({"error": str(e)}), 500
-"""
 
 ############################## 지도 #######################
 # 1. [로봇 -> 서버] 지도 이미지 및 메타데이터 업로드 수신
@@ -102,11 +94,12 @@ def upload_map():
 
     # 폼 데이터에서 메타데이터 추출 및 저장
     try:
-        current_map_meta['resolution'] = float(request.form.get('resolution', 0.05))
-        current_map_meta['origin_x'] = float(request.form.get('origin_x', 0.0))
-        current_map_meta['origin_y'] = float(request.form.get('origin_y', 0.0))
-        current_map_meta['width'] = int(request.form.get('width', 0))
-        current_map_meta['height'] = int(request.form.get('height', 0))
+        with map_lock:
+            current_map_meta['resolution'] = float(request.form.get('resolution', 0.05))
+            current_map_meta['origin_x'] = float(request.form.get('origin_x', 0.0))
+            current_map_meta['origin_y'] = float(request.form.get('origin_y', 0.0))
+            current_map_meta['width'] = int(request.form.get('width', 0))
+            current_map_meta['height'] = int(request.form.get('height', 0))
     except Exception as e:
         print(f"메타데이터 파싱 에러: {e}")
 
@@ -120,7 +113,8 @@ def serve_current_map():
 # 3. [웹 -> 서버] 클릭 좌표 계산을 위해 웹이 메타데이터를 요구할 때
 @app.route('/api/map/meta', methods=['GET'])
 def get_map_meta():
-    return jsonify(current_map_meta)
+    with map_lock:  # 🔥 [최적화] 읽을 때도 락을 걸어 안전하게 전달
+        return jsonify(current_map_meta)
 
 ############################# 지도 끝 ########################
 
@@ -148,7 +142,7 @@ def upload_panorama():
     file.save(filepath)
 
     # 2. 이미지 URL 생성 (로컬망 IP 사용)
-    image_url = f"http://192.168.0.5:5000/panorama/{filename}"
+    image_url = f"http://192.168.0.24:5000/panorama/{filename}"
 
     # 3. [핵심] 기존 patrol_logs 테이블에 "파노라마 촬영" 상황으로 저장
     connection = get_db_connection()
@@ -177,20 +171,20 @@ def save_log():
         situation = request.form.get('situation', '알 수 없는 상황')
         position = request.form.get('position', '위치 미상')
         
-        # 💡 1. 상황(situation)에 따라 저장 폴더와 URL, 파일명 분기 처리
+        # 상황(situation)에 따라 저장 폴더와 URL, 파일명 분기 처리
         if '파노라마' in situation:
             filename = f"PANO_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
             filepath = os.path.join(PANORAMA_FOLDER, filename)
-            image_url = f"http://192.168.0.5:5000/panorama/{filename}"
+            image_url = f"http://192.168.0.24:5000/panorama/{filename}"
         else:
             filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
             filepath = os.path.join(UPLOAD_FOLDER, filename)
-            image_url = f"http://192.168.0.5:5000/uploads/{filename}"
+            image_url = f"http://192.168.0.24:5000/uploads/{filename}"
             
-        # 실제 폴더에 사진 저장
+        # 폴더에 사진 저장
         file.save(filepath)
         
-        # 2. MySQL DB에 로그 정보 저장
+        # MySQL DB에 로그 정보 저장
         connection = get_db_connection()
         try:
             with connection.cursor() as cursor:
@@ -278,41 +272,6 @@ def delete_log(log_id):
         connection.close()
 
 
-
-# 카메라 cpu 터질라해서 잠정 보류 
-'''
-@app.route('/api/video/upload', methods=['POST'])  # 카메라 데이터 수신
-def upload_video():
-    global current_frame
-    file = request.data                             # 바이트 상태 그대로 이미지 가져오기 
-    nparr = np.frombuffer(file, np.uint8)           # 그대로 가져온 이미지(바이트)를 숫자 행렬로 변환
-    current_frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)   # opencv 가 처리 할 수 있는 이미지 행렬로 변환
-    return '', 204   # 확인 대답 생략 
-
-def gen_frames():
-    while True:
-        if current_frame is not None:               # current_frame 의 최신 사진 데이터 확인
-            # 처리된 이미지를 jpg 형태로 압축 (프레임 생성)
-            ret, buffer = cv2.imencode('.jpg', current_frame)
-            
-            if not ret:
-                continue
-                
-            frame = buffer.tobytes()
-            
-            # 새로운 사진(프레임) 시작 알림 -> 웹으로 사진(프레임)들 계속 보내기
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
-        else:
-            # 사진 데이터가 아직 없으면 잠시 대기 (브라우저 멈춤 방지)
-            import time
-            time.sleep(0.1)
-
-@app.route('/api/video_feed')               
-def video_feed():
-    return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
-'''
-
 # [웹 -> 서버] 명령 수신 (POST)
 @app.route('/api/robot/command', methods=['POST'])
 def receive_command():
@@ -331,9 +290,10 @@ def receive_command():
         print("명령: 충전 구역으로 이동")
     elif cmd == 'set_idle':
         print("명령: 대기 모드 전환")
-        
-    current_command = cmd
-    current_command_data = data
+
+    with cmd_lock:
+        current_command = cmd
+        current_command_data = data
     return jsonify({"status": "success"})
 
 # 이전에 설정한 웨이포인트 불러오기
@@ -351,11 +311,11 @@ def get_saved_waypoints():
 @app.route('/api/robot/command', methods=['GET'])
 def get_command_for_robot():
     global current_command, current_command_data
-    command_to_send = current_command
-    data_to_send = current_command_data
-
-    current_command = None
-    current_command_data = None 
+    with cmd_lock:
+        command_to_send = current_command
+        data_to_send = current_command_data
+        current_command = None
+        current_command_data = None
 
     if data_to_send is not None:
         # [경로 지정 등] 데이터가 있으면, 혹시 모르니 명령어 이름도 덮어씌워서 통째로 전송
@@ -373,23 +333,28 @@ def update_robot_status():
     last_heartbeat = datetime.now()
 
     if data:
-        robot_data['battery'] = data.get('battery', robot_data['battery'])
-        robot_data['drive_status'] = data.get('drive_status', robot_data['drive_status'])
-        robot_data['connection'] = data.get('connection', robot_data['connection'])
-        robot_data['x'] = data.get('x', robot_data.get('x', 0.0))
-        robot_data['y'] = data.get('y', robot_data.get('y', 0.0))
-        robot_data['theta'] = data.get('theta', robot_data.get('theta', 0.0))
-        robot_data['isDetectionRunning'] = data.get('isDetectionRunning', robot_data.get('isDetectionRunning', False))
-        robot_data['isVoiceRunning'] = data.get('isVoiceRunning', robot_data.get('isVoiceRunning', False))
-        robot_data['planned_path'] = data.get('planned_path', robot_data.get('planned_path', []))
-        robot_data['isFire'] = data.get('isFire', False)
-        robot_data['isPerson'] = data.get('isPerson', False)
-        robot_data['isIntruder'] = data.get('isIntruder', False)
+        with state_lock:
+            last_heartbeat = datetime.now()
+            robot_data.update({
+                'battery': data.get('battery', robot_data['battery']),
+                'drive_status': data.get('drive_status', robot_data['drive_status']),
+                'connection': data.get('connection', robot_data['connection']),
+                'x': data.get('x', robot_data.get('x', 0.0)),
+                'y': data.get('y', robot_data.get('y', 0.0)),
+                'theta': data.get('theta', robot_data.get('theta', 0.0)),
+                'isDetectionRunning': data.get('isDetectionRunning', robot_data.get('isDetectionRunning', False)),
+                'isVoiceRunning': data.get('isVoiceRunning', robot_data.get('isVoiceRunning', False)),
+                'planned_path': data.get('planned_path', robot_data.get('planned_path', [])),
+                'isFire': data.get('isFire', False),
+                'isPerson': data.get('isPerson', False),
+                'isIntruder': data.get('isIntruder', False),
+                'isTheft': data.get('isTheft', False),
+                'isFireDetectionOn': data.get('isFireDetectionOn', robot_data.get('isFireDetectionOn', False)),
+                'isPersonDetectionOn': data.get('isPersonDetectionOn', robot_data.get('isPersonDetectionOn', False))
+            })
+            if 'power_status' in data:
+                robot_data['power_status'] = int(data.get('power_status'))
 
-        if 'power_status' in data:
-            robot_data['power_status'] = int(data.get('power_status'))
-
-        print(f">>> [로봇 상태 갱신] 배터리: {robot_data['battery']}%, 상태: {robot_data['drive_status']}")
     return jsonify({"status": "success"})
 
 # [API] 로봇 수동 조작 
@@ -399,8 +364,8 @@ def manual_control():
     data = request.json
     action = data.get('action') # 'FORWARD', 'BACKWARD', 'LEFT', 'RIGHT', 'STOP'
     
-    # 'MANUAL_'
-    current_command = f"MANUAL_{action}"
+    with cmd_lock:  
+        current_command = f"MANUAL_{action}"
     
     print(f"수동 조작: {action}")
 
@@ -411,12 +376,15 @@ def manual_control():
 @app.route('/api/robot/status', methods=['GET'])
 def get_robot_status():
     global robot_data, last_heartbeat
-    time_diff = (datetime.now() - last_heartbeat).total_seconds()
+
+    with state_lock:
+        time_diff = (datetime.now() - last_heartbeat).total_seconds()
+        current_data = robot_data.copy()
 
     # 로봇이 보내준 power_status가 1이면 충전 중으로 판단
     # 로봇 main.py에서 robot_data['power_status']를 업데이트하고 있어야 함
     try:
-        is_charging = int(robot_data.get('power_status', 0)) == 1
+        is_charging = int(current_data.get('power_status', 0)) == 1
     except (ValueError, TypeError):
         is_charging = False
     
@@ -427,7 +395,7 @@ def get_robot_status():
         current_connection = 'Stable'
     
     # 주행 상태 결정 로직
-    raw_drive_status = robot_data.get('drive_status', 'IDLE')
+    raw_drive_status = current_data.get('drive_status', 'IDLE')
 
     if is_charging and raw_drive_status in ["대기", "IDLE"]:
         final_status = "충전 중"
@@ -435,24 +403,27 @@ def get_robot_status():
         final_status = raw_drive_status
 
     return jsonify({
-        "battery": robot_data.get('battery', 0),
+        "battery": current_data.get('battery', 0),
         "drive_status": final_status,      # 웹에 표시될 한글 상태
         "driveStatus": final_status,       # 카멜케이스 대응
-        "isCharging": is_charging,         # 🔥 리액트에서 배터리 아이콘 변경용 신호
+        "isCharging": is_charging,         # 리액트에서 배터리 아이콘 변경용 신호
         "connection": current_connection,
-        "x": robot_data.get('x', 0.0),
-        "y": robot_data.get('y', 0.0),
-        "theta": robot_data.get('theta', 0.0),
-        "isDetectionRunning": robot_data.get('isDetectionRunning', False),
-        "isVoiceRunning": robot_data.get('isVoiceRunning', False),
-        "planned_path": robot_data.get('planned_path', []),
-        "isFire": robot_data['isFire'],
-        "isPerson": robot_data['isPerson'],
-        "isIntruder": robot_data['isIntruder']
+        "x": current_data.get('x', 0.0),
+        "y": current_data.get('y', 0.0),
+        "theta": current_data.get('theta', 0.0),
+        "isDetectionRunning": current_data.get('isDetectionRunning', False),
+        "isVoiceRunning": current_data.get('isVoiceRunning', False),
+        "planned_path": current_data.get('planned_path', []),
+        "isFire": current_data['isFire'],
+        "isPerson": current_data['isPerson'],
+        "isIntruder": current_data['isIntruder'],
+        "isTheft": current_data['isTheft'],
+        "isFireDetectionOn": current_data.get('isFireDetectionOn', False),
+        "isPersonDetectionOn": current_data.get('isPersonDetectionOn', False)
     }), 200
 
 
-# [회원가입 API]
+# [API] 회원가입 
 @app.route('/api/signup', methods=['POST'])
 def signup():
     data = request.json
@@ -493,7 +464,7 @@ def signup():
     finally:
         conn.close()
 
-# [로그인 API]
+# [API] 로그인 
 @app.route('/api/login', methods=['POST'])
 def login():
     data = request.json

@@ -1,3 +1,5 @@
+/* charging screen */
+
 import { useNavigate } from 'react-router';
 import { useRobot } from '../contexts/RobotContext';
 import { Battery, CheckCircle } from 'lucide-react';

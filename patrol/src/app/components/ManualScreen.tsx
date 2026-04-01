@@ -1,9 +1,10 @@
+/* manualscreen */
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { StatusBar } from './StatusBar';
-import { Home, Keyboard, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, StopCircle, Loader2, Camera } from 'lucide-react';
-import { ImageWithFallback } from './figma/ImageWithFallback';
+import { Home, Keyboard, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, StopCircle} from 'lucide-react';
 import { useRobot } from '../contexts/RobotContext';
 
 export function ManualScreen() {
@@ -11,11 +12,11 @@ export function ManualScreen() {
   const { setMode } = useRobot();
   const [showKeyboard, setShowKeyboard] = useState(false);
   const [activeKey, setActiveKey] = useState<string | null>(null);
-  const activeKeyRef = useRef<string | null>(null); // 💡 이미 선언하신 변수 사용
+  const activeKeyRef = useRef<string | null>(null); 
 
   const sendCommand = async (action: string) => {
     try {
-      await axios.post('http://192.168.0.5:5000/api/robot/manual', { action });
+      await axios.post('http://192.168.0.24:5000/api/robot/manual', { action });
     } catch (err) {
       console.error("명령 전송 실패", err);
     }
@@ -27,11 +28,10 @@ export function ManualScreen() {
       e.preventDefault();
     }
     
-    // 💡 핵심: 이미 누른 키가 있다면 중복 처리 방지
     if (activeKeyRef.current !== null) return;
 
     const lowerKey = e.key.toLowerCase();
-    activeKeyRef.current = lowerKey; // 💡 Ref에 현재 누른 키 등록
+    activeKeyRef.current = lowerKey;
 
     switch (lowerKey) {
       case 'w': setActiveKey('up'); sendCommand('FORWARD'); break;
@@ -40,18 +40,17 @@ export function ManualScreen() {
       case 'd': setActiveKey('right'); sendCommand('RIGHT'); break;
       case ' ': setActiveKey('stop'); sendCommand('STOP'); break;
     }
-  }, []); // 💡 의존성 배열 비움 (Ref 사용으로 함수 고정)
+  }, []); 
 
   const handleKeyUp = useCallback((e: KeyboardEvent) => {
     const lowerKey = e.key.toLowerCase();
     
-    // 💡 핵심: 내가 누른 키를 뗄 때만 실행 (Ref 사용으로 activeKey 의존성 제거)
     if (activeKeyRef.current === lowerKey) {
       activeKeyRef.current = null; // Ref 초기화
       setActiveKey(null);
       sendCommand('STOP');
     }
-  }, []); // 💡 의존성 배열 비움 (함수가 새로 생성되지 않음)
+  }, []); 
 
   const handleExit = async () => {
     await sendCommand('STOP');
@@ -67,12 +66,8 @@ export function ManualScreen() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
-      if (activeKeyRef.current) {
-        sendCommand('STOP');
-      }
       setMode('stopped');
     };
-    // 💡 handleKeyDown, handleKeyUp이 이제 고정되었으므로 이 이펙트는 한 번만 실행됨
   }, [handleKeyDown, handleKeyUp, setMode]);
 
   return (
@@ -96,10 +91,12 @@ export function ManualScreen() {
               </div>
             </div>
             <div className="relative aspect-video bg-slate-900 rounded-xl overflow-hidden shadow-lg">
-              <ImageWithFallback
-                src="http://192.168.0.5:5000/api/video_feed"
+             <img
+                src="http://192.168.0.24:8080/stream?topic=/detection/annotated_image&type=mjpeg&quality=30"
                 alt="Manual Control Camera Feed"
                 className="w-full h-full object-cover"
+                referrerPolicy="no-referrer"
+                onError={(e) => console.error("카메라 스트림 에러:", e)}
               />
             </div>
           </div>

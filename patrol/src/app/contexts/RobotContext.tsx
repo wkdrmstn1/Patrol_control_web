@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+/* robotcontext */
+
+import React, { createContext, useContext, useState, useEffect,useRef } from 'react';
 import axios from 'axios';
 
 export type RobotStatus = 'idle' | 'charging' | 'running' | 'stopped' | 'manual';
@@ -28,14 +30,19 @@ interface LogEntry {
 }
 
 interface RobotContextType {
+  rawDriveStatus: string;
+  isFireDetectionOn: boolean;
+  isPersonDetectionOn: boolean;
+  hasNewLog: boolean;
+  isTheft: boolean;
   isFire: boolean;
   isPerson: boolean;
   isIntruder: boolean;
   isDetectionRunning: boolean;
-  isDetectionOn: boolean;
   isVoiceRunning: boolean;
   isVoiceOn: boolean;
-  toggleDetection: (enabled: boolean) => Promise<void>;
+  toggleFireDetection: (enabled: boolean) => Promise<void>;
+  togglePersonDetection: (enabled: boolean) => Promise<void>;
   toggleVoice:(enabled: boolean) => Promise<void>;
   status: RobotStatus;
   mode: RobotMode;
@@ -58,6 +65,7 @@ interface RobotContextType {
   addLog: (entry: Omit<LogEntry, 'id'>) => void;
   refreshLogs: () => Promise<LogEntry[]>;
   takePanorama: () => Promise<void>;
+  clearNewLogBadge: () => void;
 }
 
 const RobotContext = createContext<RobotContextType | undefined>(undefined);
@@ -73,38 +81,75 @@ export function RobotProvider({ children }: { children: React.ReactNode }) {
   const [routePoints, setRoutePoints] = useState<RobotPosition[]>([]);
   const [plannedPath, setPlannedPath] = useState<RobotPosition[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [isDetectionOn, setisDetectionOn] = useState(false);
   const [isDetectionRunning, setisDetectionRunning] = useState(false);
+  const [isFireDetectionOn, setIsFireDetectionOn] = useState(false);
+  const [isPersonDetectionOn, setIsPersonDetectionOn] = useState(false);
   const [isVoiceOn, setIsVoiceOn] = useState(false);
   const [isVoiceRunning, setisVoiceRunning] = useState(false);
   const [isFire, setIsFire] = useState(false);
   const [isPerson, setIsPerson] = useState(false);
   const [isIntruder, setIsIntruder] = useState(false);
+  const [isTheft, setIsTheft] = useState(false);
+  const [hasNewLog, setHasNewLog] = useState(false);
+  const latestLogIdRef = useRef<string | null>(null);
+  const clearNewLogBadge = () => setHasNewLog(false);
+
+  // add log Alarm
+  const refreshLogs = async (): Promise<LogEntry[]> => {
+    try {
+      const logsResponse = await axios.get(`http://192.168.0.24:5000/api/logs?t=${new Date().getTime()}`);
+      const newLogs = logsResponse.data;
+      setLogs(newLogs);
+
+      if (newLogs.length > 0) {
+        const currentLatestId = newLogs[0].id;
+        if (latestLogIdRef.current !== null && latestLogIdRef.current !== currentLatestId) {
+          setHasNewLog(true);
+        }
+        latestLogIdRef.current = currentLatestId;
+      }
+      return newLogs;
+    } catch (err) {
+      console.error("로그 업데이트 실패:", err);
+      return [];
+    }
+  };
 
   const toggleVoice = async (enabled: boolean) => {
     try {
       const cmd = enabled ? 'VOICE_ON' : 'VOICE_OFF';
-      await axios.post('http://192.168.0.5:5000/api/robot/command', { command: cmd });
+      await axios.post('http://192.168.0.24:5000/api/robot/command', { command: cmd });
       setIsVoiceOn(enabled);
     } catch (err) {
       console.error("음성인식 제어 실패", err);
     }
   };
 
-  const toggleDetection = async (enabled: boolean) => {
-  try {
-    const cmd = enabled ? 'DETECTION_ON' : 'DETECTION_OFF';
-    await axios.post('http://192.168.0.5:5000/api/robot/command', { command: cmd });
-    setisDetectionOn(enabled);
-  } catch (err) {
-    console.error("감지 제어 실패", err);
-  }
-};
+  // toggle 함수 2개로 교체
+  const toggleFireDetection = async (enabled: boolean) => {
+    try {
+      const cmd = enabled ? 'FIRE_ON' : 'FIRE_OFF';
+      await axios.post('http://192.168.0.24:5000/api/robot/command', { command: cmd });
+      setIsFireDetectionOn(enabled);
+    } catch (err) {
+      console.error("화재 감지 제어 실패", err);
+    }
+  };
+
+  const togglePersonDetection = async (enabled: boolean) => {
+    try {
+      const cmd = enabled ? 'PERSON_ON' : 'PERSON_OFF';
+      await axios.post('http://192.168.0.24:5000/api/robot/command', { command: cmd });
+      setIsPersonDetectionOn(enabled);
+    } catch (err) {
+      console.error("사람 감지 제어 실패", err);
+    }
+  };
 
   const takePanorama = async () => {
     try{
       console.log("파노라마 촬영 명령 전송");
-      await axios.post('http://192.168.0.5:5000/api/robot/command', { command: 'PANORAMA' });
+      await axios.post('http://192.168.0.24:5000/api/robot/command', { command: 'PANORAMA' });
     } catch(err){
       console.error("파노라마 명령 전송 실패:", err);
     }
@@ -133,22 +178,11 @@ export function RobotProvider({ children }: { children: React.ReactNode }) {
     return closestLabel;
   };
 
-  const refreshLogs = async (): Promise<LogEntry[]> => {
-    try {
-      const logsResponse = await axios.get(`http://192.168.0.5:5000/api/logs?t=${new Date().getTime()}`);
-      setLogs(logsResponse.data);
-      return logsResponse.data;
-    } catch (err) {
-      console.error("로그 업데이트 실패:", err);
-      return [];
-    }
-  };
-
   useEffect(() => {
 
     const fetchSavedRoutes = async () => {
       try {
-        const wpRes = await axios.get('http://192.168.0.5:5000/api/map/waypoints');
+        const wpRes = await axios.get('http://192.168.0.24:5000/api/map/waypoints');
         if (wpRes.data && wpRes.data.length > 0) {
           setRoutePoints(wpRes.data.map((p: any) => ({ x: p.x, y: p.y, label: p.label })));
         }
@@ -161,8 +195,8 @@ export function RobotProvider({ children }: { children: React.ReactNode }) {
 
     const fetchRobotData = async () => {
       try {
-        const response = await axios.get(`http://192.168.0.5:5000/api/robot/status?t=${new Date().getTime()}`);
-        const { battery, drive_status, connection: conn, isCharging: charging, x, y, theta, isDetectionRunning: running, isVoiceRunning: voiceRunning, planned_path, isFire, isPerson, isIntruder } = response.data;
+        const response = await axios.get(`http://192.168.0.24:5000/api/robot/status?t=${new Date().getTime()}`);
+        const { battery, drive_status, connection: conn, isCharging: charging, x, y, theta, isDetectionRunning: running, isVoiceRunning: voiceRunning, planned_path, isFire, isPerson, isIntruder, isTheft, isFireDetectionOn, isPersonDetectionOn } = response.data;
 
         setBattery(battery);
         setDriveStatus(drive_status);
@@ -173,6 +207,10 @@ export function RobotProvider({ children }: { children: React.ReactNode }) {
         setIsFire(isFire);
         setIsPerson(isPerson);
         setIsIntruder(isIntruder);
+        setIsTheft(isTheft);
+
+        if (isFireDetectionOn !== undefined) setIsFireDetectionOn(isFireDetectionOn);
+        if (isPersonDetectionOn !== undefined) setIsPersonDetectionOn(isPersonDetectionOn);
         
         if (planned_path) {
           setPlannedPath(planned_path);
@@ -219,7 +257,7 @@ export function RobotProvider({ children }: { children: React.ReactNode }) {
     }
 
     const movingStatuses = ['주행 중', 'PATROLLING', 'once', 'loop', 'RUNNING'];
-    if (movingStatuses.includes(driveStatus)) {
+    if (movingStatuses.includes(driveStatus) || driveStatus.includes('이동 중')) {
       return 'running'; 
     }
     
@@ -253,7 +291,7 @@ export function RobotProvider({ children }: { children: React.ReactNode }) {
       
       console.log(` Flask 명령어: ${cmd}`);
       
-      await axios.post('http://192.168.0.5:5000/api/robot/command', { 
+      await axios.post('http://192.168.0.24:5000/api/robot/command', { 
         command: cmd 
       });
     } catch (err) {
@@ -263,7 +301,7 @@ export function RobotProvider({ children }: { children: React.ReactNode }) {
 
   const stopRobot = async () => {
     try {
-      await axios.post('http://192.168.0.5:5000/api/robot/command', { 
+      await axios.post('http://192.168.0.24:5000/api/robot/command', { 
         command: 'stop' 
       });
     } catch (err) {
@@ -279,7 +317,7 @@ export function RobotProvider({ children }: { children: React.ReactNode }) {
  
   const stopCharging = async () => {
     try {
-      await axios.post('http://192.168.0.5:5000/api/robot/command', { command: 'set_idle' });
+      await axios.post('http://192.168.0.24:5000/api/robot/command', { command: 'set_idle' });
       setMode('stopped');
     } catch (err) {
       console.error("명령 전송 실패:", err);
@@ -288,7 +326,7 @@ export function RobotProvider({ children }: { children: React.ReactNode }) {
 
   const startCharging = async () => {
     try {
-      await axios.post('http://192.168.0.5:5000/api/robot/command', { command: 'go_to_charging_zone' });
+      await axios.post('http://192.168.0.24:5000/api/robot/command', { command: 'go_to_charging_zone' });
     } catch (err) {
       console.error("이동 명령 전송 실패:", err);
     }
@@ -297,15 +335,21 @@ export function RobotProvider({ children }: { children: React.ReactNode }) {
   return (
     <RobotContext.Provider
       value={{
+        rawDriveStatus: driveStatus,
+        clearNewLogBadge,
+        hasNewLog,
+        isTheft,
         isFire,
         isPerson,
         isIntruder,
         isDetectionRunning,
-        isDetectionOn,
         isVoiceOn,
         isVoiceRunning,
         toggleVoice,
-        toggleDetection,
+        isFireDetectionOn,
+        isPersonDetectionOn,
+        toggleFireDetection,
+        togglePersonDetection,
         status: getMappedStatus(),
         mode,
         battery,

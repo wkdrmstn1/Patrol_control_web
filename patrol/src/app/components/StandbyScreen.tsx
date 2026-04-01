@@ -1,3 +1,5 @@
+/* standbyscreen */
+
 import { useNavigate } from 'react-router';
 import { useRobot } from '../contexts/RobotContext';
 import { StatusBar } from './StatusBar';

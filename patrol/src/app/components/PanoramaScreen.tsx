@@ -1,3 +1,5 @@
+/* panoramascreen */
+
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router'; // useLocation 추가
 import { CheckCircle, Home, Camera, Loader2 } from 'lucide-react'; // Loader2 추가

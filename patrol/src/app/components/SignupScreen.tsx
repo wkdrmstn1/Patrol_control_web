@@ -1,10 +1,12 @@
+/* signupscreen */
+
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import axios from 'axios'; // API 통신을 위해 추가
-import { Lock, User, CheckCircle, Bot, CreditCard } from 'lucide-react';
+import axios from 'axios'; 
+import { Lock, CheckCircle, Bot, CreditCard } from 'lucide-react';
 
 export function SignupScreen() {
-  const [employeeId, setEmployeeId] = useState(''); // 아이디를 사원증 번호로 변경
+  const [employeeId, setEmployeeId] = useState(''); 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
@@ -15,7 +17,7 @@ export function SignupScreen() {
     e.preventDefault();
     setError('');
     
-    // 1. 기본 유효성 검사
+    // 유효성 검사
     if (password !== confirmPassword) {
       setError('비밀번호가 일치하지 않습니다.');
       return;
@@ -27,8 +29,8 @@ export function SignupScreen() {
     }
 
     try {
-      // 2. Flask 백엔드 API 호출 (사원증 번호 기반 가입)
-      const response = await axios.post('http://192.168.0.5:5000/api/signup', {
+      // Flask 백엔드 API 호출 (사원증 번호 기반 가입)
+      const response = await axios.post('http://192.168.0.24:5000/api/signup', {
         userId: employeeId,   // 사용자가 입력한 사원증 번호를 아이디로 사용
         password: password,
         employeeId: employeeId // 인증을 위한 사원증 번호로도 동일하게 전송
@@ -41,7 +43,7 @@ export function SignupScreen() {
         }, 2000);
       }
     } catch (err: any) {
-      // 3. 백엔드 에러 메시지 처리 (사원증 번호 불일치, 이미 가입됨 등)
+      // 백엔드 에러 메시지 처리 (사원증 번호 불일치, 이미 가입됨 등)
       const errorMessage = err.response?.data?.error || '회원가입 중 오류가 발생했습니다.';
       setError(errorMessage);
     }

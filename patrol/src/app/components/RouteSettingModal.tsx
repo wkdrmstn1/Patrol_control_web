@@ -1,3 +1,5 @@
+/* routesettingmodal */
+
 import { useState, useEffect, useRef } from 'react';
 import { useRobot } from '../contexts/RobotContext';
 import { X, MapPin, Flag, Home, Navigation, ArrowUp, ArrowDown, Settings2 } from 'lucide-react';
@@ -11,6 +13,7 @@ interface Point {
   id: string;
   x: number;
   y: number;
+  yaw: number;
   type: 'start' | 'waypoint';
   section: 'A' | 'B';
 }
@@ -25,20 +28,21 @@ export function RouteSettingModal({ onClose }: RouteSettingModalProps) {
 
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+  const [rotatingId, setRotatingId] = useState<string | null>(null);
   const isDraggingRef = useRef(false);
   const [showOrderModal, setShowOrderModal] = useState(false); 
 
-  // 💡 1. 맵 메타데이터 & 이전 경로 불러오는 부분 (useEffect)
+  // 맵 메타데이터 & 이전 경로 불러오는 부분 (useEffect)
   useEffect(() => {
     const initData = async () => {
       try {
-        const metaRes = await axios.get('http://192.168.0.5:5000/api/map/meta');
+        const metaRes = await axios.get('http://192.168.0.24:5000/api/map/meta');
         const meta = metaRes.data;
         setMapMeta(meta);
 
         // 맵 정보가 정상일 때 이전 경로 가져와서 픽셀로 역산 복원
         if (meta.width > 0) {
-          const wpRes = await axios.get('http://192.168.0.5:5000/api/map/waypoints');
+          const wpRes = await axios.get('http://192.168.0.24:5000/api/map/waypoints');
           if (wpRes.data && wpRes.data.length > 0) {
             const loadedPoints = wpRes.data.map((p: any, index: number) => {
               const original_xPx = (p.x - meta.origin_x) / meta.resolution;
@@ -50,6 +54,7 @@ export function RouteSettingModal({ onClose }: RouteSettingModalProps) {
                 id: Date.now().toString() + index,
                 x: xPct,
                 y: yPct,
+                yaw: p.yaw || 0,
                 type: p.type || (index === 0 ? 'start' : 'waypoint'),
                 section: p.section || 'A'
               };
@@ -67,7 +72,7 @@ export function RouteSettingModal({ onClose }: RouteSettingModalProps) {
     return () => clearInterval(interval);
   }, []);
 
-  // 💡 2. 밖으로 빼낸 핵심 함수들
+  // 밖으로 빼낸 핵심 함수들
   const getLabeledPoints = () => {
     let aCount = 1;
     let bCount = 1;
@@ -92,8 +97,8 @@ export function RouteSettingModal({ onClose }: RouteSettingModalProps) {
   };
 
 
-  // 📍 1. 지도 빈 곳 클릭 시
-  const handleMapClick = (e: React.MouseEvent<HTMLDivElement>) => {
+  // 지도 빈 곳 클릭 시 (RViz)
+  const handleMapPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (isDraggingRef.current) return;
     if (activeMenuId) { setActiveMenuId(null); return; }
 
@@ -101,58 +106,72 @@ export function RouteSettingModal({ onClose }: RouteSettingModalProps) {
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
 
+    const newId = Date.now().toString();
     const newPoint: Point = {
-      id: Date.now().toString(),
-      x, y,
-      section: 'A', // 기본값 A구역
+      id: newId, x, y, yaw: 0, section: 'A', // yaw 속성 추가
       type: !points.some(p => p.type === 'start') ? 'start' : 'waypoint'
     };
     setPoints([...points, newPoint]);
-  };
-
-  // 마커 누름 (드래그 시작점)
-  const handlePointerDown = (e: React.PointerEvent, id: string) => {
-    if (e.button !== 0) return; // 왼쪽 클릭만 허용
-    e.stopPropagation(); // 지도로 클릭 이벤트 전파 방지
-
-    setDraggingId(id);
-    isDraggingRef.current = false; // 드래그 여부 초기화
-    
+    setRotatingId(newId);
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
   };
 
-  // 🖱️ 3. 드래그 중
-  const handlePointerMove = (e: React.PointerEvent) => {
-    if (!draggingId) return;
-    
-    // 미세한 움직임이 있을 때만 드래그로 판정
-    if (Math.abs(e.movementX) > 1 || Math.abs(e.movementY) > 1) {
-      isDraggingRef.current = true;
-    }
-
-    const rect = e.currentTarget.getBoundingClientRect();
-    let x = ((e.clientX - rect.left) / rect.width) * 100;
-    let y = ((e.clientY - rect.top) / rect.height) * 100;
-
-    x = Math.max(0, Math.min(100, x));
-    y = Math.max(0, Math.min(100, y));
-
-    setPoints(points.map(p => p.id === draggingId ? { ...p, x, y } : p));
+  // 마커 누름 (위치 이동 시작)
+  const handlePointerDown = (e: React.PointerEvent, id: string) => {
+    if (e.button !== 0) return; // 왼쪽 클릭만 허용
+    e.stopPropagation(); 
+    setDraggingId(id);
+    isDraggingRef.current = false; 
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
   };
 
-  // 🖱️ 4. 마커 뗌 (드래그 종료)
-  const handlePointerUp = (e: React.PointerEvent) => {
+  // 드래그 중 (위치 이동 OR 방향 회전)
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    
+    // 마커 위치를 이동할 때
     if (draggingId) {
+      if (Math.abs(e.movementX) > 1 || Math.abs(e.movementY) > 1) {
+        isDraggingRef.current = true;
+      }
+      let x = ((e.clientX - rect.left) / rect.width) * 100;
+      let y = ((e.clientY - rect.top) / rect.height) * 100;
+      x = Math.max(0, Math.min(100, x));
+      y = Math.max(0, Math.min(100, y));
+      setPoints(points.map(p => p.id === draggingId ? { ...p, x, y } : p));
+    } 
+    // 화살표 끝을 잡고 방향(Yaw)을 돌릴 때
+    else if (rotatingId) {
+      isDraggingRef.current = true;
+      const p = points.find(pt => pt.id === rotatingId);
+      if (!p) return;
+
+      // 마커 중심점과 현재 마우스 위치의 각도 계산
+      const pX_px = rect.left + (p.x / 100) * rect.width;
+      const pY_px = rect.top + (p.y / 100) * rect.height;
+      const dx_vis = e.clientX - pX_px;
+      const dy_vis = e.clientY - pY_px;
+
+      if (Math.hypot(dx_vis, dy_vis) > 15) {
+        // ROS 라디안 체계로 변환하여 저장
+        const yaw_ros = Math.atan2(-dx_vis, -dy_vis);
+        setPoints(points.map(pt => pt.id === rotatingId ? { ...pt, yaw: yaw_ros } : pt));
+      }
+    }
+  };
+
+  // 마커 뗌 (드래그 종료)
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (draggingId || rotatingId) {
       e.stopPropagation();
       (e.target as HTMLElement).releasePointerCapture(e.pointerId);
       setDraggingId(null);
-      
-      // 드래그 판정 플래그를 약간 늦게 꺼서 지도의 handleMapClick 발동 방지
+      setRotatingId(null); // 💡 회전 모드도 끕니다.
       setTimeout(() => { isDraggingRef.current = false; }, 50);
     }
   };
 
-  // 💡 [핵심] 5. 마커 더블 클릭 시 메뉴 토글
+  // 마커 더블 클릭 시 메뉴 토글
   const handleMarkerDoubleClick = (e: React.MouseEvent, id: string) => {
     e.stopPropagation(); // 지도의 클릭 이벤트 방지
     setActiveMenuId(prev => prev === id ? null : id);
@@ -175,44 +194,52 @@ export function RouteSettingModal({ onClose }: RouteSettingModalProps) {
   };
 
   const handleComplete = async () => {
-    if (!mapMeta || mapMeta.width === 0) {
-      alert("지도를 로드하는 중입니다. 잠시 후 시도해주세요.");
+    let currentMeta = mapMeta;
+
+    // 만약 메타데이터가 0으로 고여있다면, 전송 직전에 강제로 서버에 최신값을 한 번 더 물어봅니다.
+    if (!currentMeta || Number(currentMeta.width) === 0) {
+      try {
+        const metaRes = await axios.get('http://192.168.0.24:5000/api/map/meta');
+        currentMeta = metaRes.data;
+        setMapMeta(currentMeta); // 최신값으로 상태 갱신
+      } catch (e) {
+        console.error("메타데이터 갱신 실패", e);
+      }
+    }
+
+    // 그래도 0이면 진짜로 서버에 맵이 없는 것
+    if (!currentMeta || Number(currentMeta.width) === 0) {
+      alert("지도를 로드하는 중입니다. 터틀봇 맵 노드가 켜져있는지 확인 후 잠시 후 시도해주세요.");
       return;
     }
 
-    const startPoint = points.find(p => p.type === 'start');
-    const waypoints = points.filter(p => p.type === 'waypoint');
-
-    const orderedPoints = [];
-    if (startPoint) orderedPoints.push(startPoint);
-    orderedPoints.push(...waypoints);
-
-    // 💡 [수정] 90도 회전 역산 공식 정교화
+    // 역산할 때 낡은 mapMeta 대신 방금 갱신된 currentMeta를 사용해 계산합니다.
     const realCoordinates = labeledPoints.map(p => {
-      const original_yPx = (1 - (p.x / 100)) * mapMeta.width; 
-      const original_xPx = (1 - (p.y / 100)) * mapMeta.height; 
-      const realX = mapMeta.origin_x + (original_xPx * mapMeta.resolution);
-      const realY = mapMeta.origin_y + (original_yPx * mapMeta.resolution);
+      const original_yPx = (1 - (p.x / 100)) * currentMeta.width; 
+      const original_xPx = (1 - (p.y / 100)) * currentMeta.height; 
+      const realX = currentMeta.origin_x + (original_xPx * currentMeta.resolution);
+      const realY = currentMeta.origin_y + (original_yPx * currentMeta.resolution);
 
       return { 
         type: p.type, 
-        section: p.section, // 추가
-        label: p.label,     // 동적 라벨(A-1 등) 추가
+        section: p.section,
+        label: p.label,     
         x: parseFloat(realX.toFixed(2)), 
-        y: parseFloat(realY.toFixed(2)) 
+        y: parseFloat(realY.toFixed(2)),
+        yaw: parseFloat((p.yaw || 0).toFixed(3)) 
       };
     });
 
-    console.log("📍 로봇 전송 좌표:", realCoordinates);
+    console.log("📍 로봇 전송 좌표 (사용자 지정 Yaw):", realCoordinates);
 
     try {
-      await axios.post('http://192.168.0.5:5000/api/robot/command', {
+      await axios.post('http://192.168.0.24:5000/api/robot/command', {
         command: 'WAYPOINT_NAVIGATION',
-        waypoints: realCoordinates
+        waypoints: realCoordinates 
       });
 
-      // 💡 [중요] 퍼센트(p.x)가 아니라 계산된 실제 좌표(realX)를 저장해야 파노라마 오차가 안 납니다!
-      setRoutePoints(realCoordinates.map(p => ({ x: p.x, y: p.y, label: p.label })));
+      // 화면에 보여줄 Context에도 방향(theta) 저장
+      setRoutePoints(realCoordinates.map(p => ({ x: p.x, y: p.y, label: p.label, theta: p.yaw })));
 
       alert("경로가 전송되었습니다.");
       onClose();
@@ -220,6 +247,8 @@ export function RouteSettingModal({ onClose }: RouteSettingModalProps) {
       alert("서버 전송에 실패했습니다.");
     }
   };
+
+  const mapAspectRatio = mapMeta?.height > 0 ? mapMeta.width / mapMeta.height : 16 / 9;
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -250,23 +279,24 @@ export function RouteSettingModal({ onClose }: RouteSettingModalProps) {
         {/* Map Area */}
         <div className="flex-1 overflow-auto p-6">
           <div
-            onClick={handleMapClick}
+            onPointerDown={handleMapPointerDown} 
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerLeave={handlePointerUp}
-            className="relative w-full aspect-video bg-white rounded-2xl cursor-crosshair overflow-hidden shadow-xl touch-none"
+            className="relative w-full bg-white rounded-2xl cursor-crosshair overflow-hidden shadow-xl touch-none"
+            style={{ aspectRatio: mapAspectRatio }}
           >
             <img
-              src={`http://192.168.0.5:5000/map/current_map.jpg?t=${mapTick}`}
+              src={`http://192.168.0.24:5000/map/current_map.jpg?t=${mapTick}`}
               alt="Map"
-              className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+              className="absolute inset-0 w-full h-full object-fill pointer-events-none"
               draggable="false"
             />
             
             <svg className="absolute inset-0 w-full h-full pointer-events-none z-10">
-              {labeledPoints.map((point, index) => { // 💡 수정 후
+              {labeledPoints.map((point, index) => { 
                 if (index === labeledPoints.length - 1) return null;
-                const nextPoint = labeledPoints[index + 1]; // 💡 수정 후
+                const nextPoint = labeledPoints[index + 1]; 
                 return (
                   <line
                     key={`line-${point.id}`}
@@ -278,52 +308,82 @@ export function RouteSettingModal({ onClose }: RouteSettingModalProps) {
               })}
             </svg>
 
-            {labeledPoints.map((point, index) => (
-              <div
-                key={point.id}
-                className={`absolute transform -translate-x-1/2 -translate-y-1/2 
-                  ${!draggingId ? 'transition-all duration-200' : ''}
-                  ${activeMenuId === point.id ? 'z-50' : draggingId === point.id ? 'z-40' : 'z-20'}
-                  ${draggingId === point.id ? 'scale-110' : 'scale-100'}`}
-                style={{ left: `${point.x}%`, top: `${point.y}%` }}
-              >
-                <div className="relative">
-                  <div 
-                    onPointerDown={(e) => handlePointerDown(e, point.id)}
-                    onDoubleClick={(e) => handleMarkerDoubleClick(e, point.id)}
-                    onClick={(e) => e.stopPropagation()} // 클릭 시 지도에 점 추가 방지
-                    className="cursor-grab active:cursor-grabbing"
-                  >
-                    {point.type === 'start' && (
-                      <div className="size-10 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full flex items-center justify-center shadow-xl border-4 border-white">
-                        <Home className="size-5 text-white" strokeWidth={2.5} />
-                      </div>
-                    )}
-                    {point.type === 'waypoint' && point.section === 'A' && (
-                      <div className="size-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-xl border-2 border-white">
-                        <MapPin className="size-4 text-white" strokeWidth={2.5} />
-                      </div>
-                    )}
-                    {point.type === 'waypoint' && point.section === 'B' && (
-                      <div className="size-8 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center shadow-xl border-2 border-white">
-                        <MapPin className="size-4 text-white" strokeWidth={2.5} />
+            {labeledPoints.map((point, index) => { 
+              
+              // ROS 라디안 각도를 화면에 보여줄 CSS 각도(도)로 변환
+              const visualRotateDeg = -(point.yaw * 180 / Math.PI);
+              const isInteracting = draggingId === point.id || rotatingId === point.id;
+
+              return ( 
+                <div
+                  key={point.id}
+                  className={`absolute transform -translate-x-1/2 -translate-y-1/2 
+                    ${!isInteracting ? 'transition-all duration-200' : ''}
+                    ${activeMenuId === point.id ? 'z-50' : isInteracting ? 'z-40' : 'z-20'}
+                    ${isInteracting ? 'scale-110' : 'scale-100'}`}
+                  style={{ left: `${point.x}%`, top: `${point.y}%` }}
+                >
+                  <div className="relative">
+                    {/* 방향(Yaw) 지시 화살표 UI 및 회전 핸들 */}
+                    <div
+                      className="absolute top-1/2 left-1/2 w-0 h-0"
+                      style={{ transform: `rotate(${visualRotateDeg}deg)` }}
+                    >
+                      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-1.5 h-8 bg-gradient-to-t from-rose-500/0 to-rose-500 rounded-full pointer-events-none" />
+                      <div className="absolute bottom-11 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-r-[6px] border-b-[10px] border-transparent border-b-rose-500 pointer-events-none" />
+                      
+                      <div
+                        className="absolute bottom-10 left-1/2 -translate-x-1/2 size-8 rounded-full cursor-alias pointer-events-auto"
+                        onPointerDown={(e) => {
+                          e.stopPropagation();
+                          setRotatingId(point.id);
+                          isDraggingRef.current = false;
+                          (e.target as HTMLElement).setPointerCapture(e.pointerId);
+                        }}
+                      />
+                    </div>
+
+                    {/* 기존 마커 아이콘 */}
+                    <div 
+                      onPointerDown={(e) => handlePointerDown(e, point.id)}
+                      onDoubleClick={(e) => handleMarkerDoubleClick(e, point.id)}
+                      onClick={(e) => e.stopPropagation()} 
+                      className="cursor-grab active:cursor-grabbing relative z-10"
+                    >
+                      {point.type === 'start' && (
+                        <div className="size-10 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full flex items-center justify-center shadow-xl border-4 border-white">
+                          <Home className="size-5 text-white" strokeWidth={2.5} />
+                        </div>
+                      )}
+                      {point.type === 'waypoint' && point.section === 'A' && (
+                        <div className="size-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-xl border-2 border-white">
+                          <MapPin className="size-4 text-white" strokeWidth={2.5} />
+                        </div>
+                      )}
+                      {point.type === 'waypoint' && point.section === 'B' && (
+                        <div className="size-8 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center shadow-xl border-2 border-white">
+                          <MapPin className="size-4 text-white" strokeWidth={2.5} />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 옵션 메뉴 팝업 */}
+                    {activeMenuId === point.id && (
+                      <div 
+                      onPointerDown={(e) => e.stopPropagation()}
+                      className="absolute -bottom-24 left-1/2 -translate-x-1/2 bg-black/80 text-white px-3 py-2 rounded-xl text-xs whitespace-nowrap space-y-2 shadow-xl pointer-events-auto z-[100]">
+                        <div className="font-semibold text-center border-b border-white/20 pb-1 mb-1">
+                          {point.label} 옵션
+                        </div>
+                        <button onClick={(e) => { e.stopPropagation(); changePointType(point.id, 'start'); }} className="block w-full text-left hover:text-green-300">시작점으로 설정</button>
+                        <button onClick={(e) => { e.stopPropagation(); changePointType(point.id, 'waypoint'); }} className="block w-full text-left hover:text-blue-300">경유지로 변경</button>
+                        <button onClick={(e) => { e.stopPropagation(); removePoint(point.id); }} className="block w-full text-left text-red-400 hover:text-red-200 pt-1 border-t border-white/20 mt-1">삭제</button>
                       </div>
                     )}
                   </div>
-
-                  {activeMenuId === point.id && (
-                    <div className="absolute -bottom-24 left-1/2 -translate-x-1/2 bg-black/80 text-white px-3 py-2 rounded-xl text-xs whitespace-nowrap space-y-2 shadow-xl pointer-events-auto z-[100]">
-                      <div className="font-semibold text-center border-b border-white/20 pb-1 mb-1">
-                        {point.label} 옵션
-                      </div>
-                      <button onClick={(e) => { e.stopPropagation(); changePointType(point.id, 'start'); }} className="block w-full text-left hover:text-green-300">시작점으로 설정</button>
-                      <button onClick={(e) => { e.stopPropagation(); changePointType(point.id, 'waypoint'); }} className="block w-full text-left hover:text-blue-300">경유지로 변경</button>
-                      <button onClick={(e) => { e.stopPropagation(); removePoint(point.id); }} className="block w-full text-left text-red-400 hover:text-red-200 pt-1 border-t border-white/20 mt-1">삭제</button>
-                    </div>
-                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <div className="mt-6 flex gap-8 justify-center">
