@@ -290,6 +290,13 @@ export function RobotProvider({ children }: { children: React.ReactNode }) {
       const cmd = autoMode; 
       
       console.log(` Flask 명령어: ${cmd}`);
+
+      await axios.post('http://192.168.0.24:5000/api/robot/command', { 
+        command: 'stop' 
+      });
+
+      // stop 0.1초 대기 -> start 
+      await new Promise(resolve => setTimeout(resolve, 100));
       
       await axios.post('http://192.168.0.24:5000/api/robot/command', { 
         command: cmd 

@@ -27,7 +27,6 @@ export function StatusBar() {
   });
 
   const getDetectionStatusText = () => {
-    if (isTheft) return "🚨 도난 감지!!";
     if (isFire) return "🔥 화재 발생!";
     if (isIntruder) return "🚨 침입자 감지";
     if (isPerson) return "👤 사람 감지";
@@ -42,6 +41,7 @@ export function StatusBar() {
 
   const getStatusText = () => {
     if (isOffline) return '연결 안됨';
+    if (isTheft) return '🚨 도난 감지';
 
     if (status === 'running') return rawDriveStatus;
 
@@ -55,6 +55,7 @@ export function StatusBar() {
   };
 
   const getStatusTextColor = () => {
+    if (isTheft) return 'text-red-500 animate-bounce';
     if (isOffline) return 'text-red-500';
     if (isCharging || status === 'charging') return 'text-green-400';
     return 'text-white';
@@ -62,7 +63,7 @@ export function StatusBar() {
 
   const getDetectionStatusColor = () => {
     if (isOffline) return 'text-red-500'
-    if (isTheft || isFire || isIntruder) return "text-red-500 animate-bounce"; // 위험 상황 강조
+    if (isFire || isIntruder) return "text-red-500 animate-bounce"; // 위험 상황 강조
     if (isPerson) return "text-orange-500";
     return "text-emerald-500";
   };
@@ -76,6 +77,7 @@ export function StatusBar() {
   };
 
   const getStatusColor = () => {
+    if (isTheft) return 'bg-red-600 animate-pulse';
     if (isOffline) return 'bg-red-500';
     if (isCharging || status === 'charging') return 'bg-green-500';
     

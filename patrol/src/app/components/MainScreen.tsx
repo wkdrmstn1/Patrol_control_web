@@ -15,7 +15,8 @@ import {
   Navigation,
   Home,
   Zap,
-  AlertTriangle 
+  AlertTriangle,
+  Flag 
 } from 'lucide-react';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { LogHistoryModal } from './LogHistoryModal';
@@ -256,19 +257,35 @@ export function MainScreen() {
                   )}
                 </svg>
 
+                {/* 도착지에 깃발 마커 그리기 */}
+                {plannedPath && plannedPath.length > 0 && (
+                  <div 
+                    className="absolute transition-all duration-500 ease-linear pointer-events-none z-20"
+                    style={{
+                      left: `${getPathCoords(plannedPath[plannedPath.length - 1].x, plannedPath[plannedPath.length - 1].y).xPct}%`,
+                      top: `${getPathCoords(plannedPath[plannedPath.length - 1].x, plannedPath[plannedPath.length - 1].y).yPct}%`,
+                      transform: 'translate(-50%, -100%)' // 마커의 끝(뾰족한 부분)이 좌표에 닿도록 보정
+                    }}
+                  >
+                    <div className="relative flex items-center justify-center -mt-2">
+                      <Flag className="size-6 text-rose-600 fill-rose-500 drop-shadow-lg animate-bounce" />
+                    </div>
+                  </div>
+                )}
 
-                {/* 로봇 아이콘*/}
+                {/*  로봇 아이콘 (Yaw 방향에 맞게 회전 추가) */}
                 <div 
-                  className="absolute transition-all duration-500 ease-linear pointer-events-none"
+                  className="absolute transition-all duration-500 ease-linear pointer-events-none z-30"
                   style={{
                     left: getRobotPixelPos().left,
                     bottom: getRobotPixelPos().bottom,
-                    transform: 'translate(-50%, 50%)' // 아이콘 중심 보정
+                    // 로봇의 Yaw(theta) 값을 Degree로 변환하여 Navigation 아이콘 회전
+                    transform: `translate(-50%, 50%) rotate(${-(position.theta || 0) * (180 / Math.PI)}deg)`
                   }}
                 >
                   <div className="relative flex items-center justify-center">
                     {/* 로봇 모양 아이콘 */}
-                    <Navigation className="size-6 text-blue-600 fill-blue-600 drop-shadow-md " />
+                    <Navigation className="size-6 text-blue-600 fill-blue-600 drop-shadow-md" />
                     {/* 핑 애니메이션 */}
                     <span className="absolute size-8 bg-blue-400 rounded-full animate-ping opacity-30"></span>
                   </div>
