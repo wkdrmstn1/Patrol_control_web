@@ -1,5 +1,5 @@
 patrol/
-├── Backend (patrol_backend/)
+├── patrol_backend/             # Flask 기반 API 서버 (로봇 통신 및 DB 관리)
 │   ├── app.py                  # 백엔드 메인 서버 (RESTful API & DB 연동)
 │   └── uploads/                # 로봇 전송 데이터 저장소
 │       ├── map/                # 실시간 SLAM 지도 이미지 (.jpg) 저장
@@ -7,7 +7,7 @@ patrol/
 │       ├── last_waypoints.json # 웹에서 지정한 최신 경로 데이터 백업 (휘발 방지)
 │       └── *.jpg               # 객체 감지(화재/침입자/도난) 시 캡처된 로그 사진
 │
-└── Frontend (src/app/)
+└── src/app/                    # React + TypeScript 기반 프론트엔드
     ├── App.tsx                 # 애플리케이션 메인 엔트리 및 라우팅 설정
     ├── layout.tsx              # 공통 레이아웃 및 메타데이터 정의
     ├── page.tsx                # 서비스 접속 시 첫 메인 페이지 렌더링
@@ -21,11 +21,11 @@ patrol/
         ├── MainScreen.tsx      # 관제 대시보드 (지도 + 카메라 + 제어 패널 통합)
         ├── ManualScreen.tsx    # 원격 수동 조작 UI (WASD 입력 처리)
         ├── StandbyScreen.tsx   # 로봇 임무 대기 전용 화면
-        ├── ChargingScreen.tsx  # 충전 스테이션 도킹 시 전용 상태 화면
+        ├── ChargingScreen.tsx  # 충전 이동 및 충전을 위한 대기 상태 화면
         ├── PanoramaScreen.tsx  # 촬영된 파노라마 이미지 전용 뷰어
-        ├── LoginScreen.tsx     # 관리자 로그인 페이지
-        ├── SignupScreen.tsx    # 신규 관리자 사원 등록 페이지
-        ├── StatusBar.tsx       # 상단 고정 상태바 (배터리/연결/위치 실시간 표기)
+        ├── LoginScreen.tsx     # 로그인 페이지
+        ├── SignupScreen.tsx    # 회원가입 페이지
+        ├── StatusBar.tsx       # 상단 고정 상태바 (배터리/연결/위치 실시간 표기/객체 감지 상태/현재시간)
         ├── RouteSettingModal.tsx # 지도 마커 기반 자율주행 경로 및 방향 설정 도구
         ├── LogHistoryModal.tsx # 감지 이벤트(로그) 리스트 및 히스토리 조회
         ├── ImageModal.tsx      # 로그 이미지 상세 보기 팝업
