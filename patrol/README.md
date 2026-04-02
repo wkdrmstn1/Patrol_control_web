@@ -1,3 +1,4 @@
+```text
 patrol/
 ├── patrol_backend/             # Flask 기반 API 서버 (로봇 통신 및 DB 관리)
 │   ├── app.py                  # 백엔드 메인 서버 (RESTful API & DB 연동)
@@ -32,3 +33,5 @@ patrol/
         ├── figma/              # 디자인 관련 유틸리티
         │   └── ImageWithFallback.tsx # 이미지 로드 실패 시 대체 이미지 처리
         └── ui/                 # 공통 버튼, 입력창 등 기본 UI 에셋
+
+```
