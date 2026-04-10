@@ -135,7 +135,7 @@ export function LogHistoryModal({ onClose }: LogHistoryModalProps) {
                     const isSelected = selectedIds.includes(log.id);
 
                     return (
-                      <tr key={log.id} className={`group transition-all duration-200 ${isSelected ? 'bg-indigo-50/50' : isPano ? 'bg-orange-50/50' : (isFire || isIntruder || isTheft) ? 'bg-red-50/50' : 'hover:bg-slate-50/80'}`}>
+                      <tr key={log.id} className={`group transition-all duration-200 ${isSelected ? 'bg-indigo-50/50' : isPano ? 'bg-orange-50/50' : isFire ? 'bg-red-50/50' : isIntruder ? 'bg-rose-50/50' : isTheft ? 'bg-gradient-to-r from-red-100/60 to-blue-100/60' : 'hover:bg-slate-50/80'}`}>
                         <td className="px-6 py-5 text-center">
                           <button onClick={() => toggleSelectOne(log.id)} className="transition-colors">
                             {isSelected 
@@ -152,12 +152,10 @@ export function LogHistoryModal({ onClose }: LogHistoryModalProps) {
                         {/* 상황 */}
                         <td className="px-6 py-5">
                           <span className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black border-2 shadow-sm transition-all ${
-                            (isFire || isTheft) 
-                              ? 'border-red-600 bg-red-600 text-white' 
-                            : isIntruder 
-                              ? 'border-rose-700 bg-rose-700 text-white' 
-                            : isPano 
-                              ? 'border-orange-500 bg-white text-orange-600' 
+                            isFire ? 'border-red-600 bg-red-600 text-white' 
+                            : isTheft ? 'bg-gradient-to-r from-red-500 to-blue-600 hover:from-red-600 hover:to-blue-700 shadow-purple-100' 
+                            : isIntruder ? 'border-rose-700 bg-rose-700 text-white' 
+                            : isPano ? 'border-orange-500 bg-white text-orange-600' 
                             : 'border-slate-200 bg-slate-100 text-slate-500' 
                           }`}>
                             {isPano ? '📸 파노라마 촬영' : log.situation}
@@ -177,7 +175,8 @@ export function LogHistoryModal({ onClose }: LogHistoryModalProps) {
                               <button
                                 onClick={() => setSelectedImage(log.imageUrl)}
                                 className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all shadow-md active:scale-95 text-white ${
-                                  (isFire || isTheft) ? 'bg-red-600 hover:bg-red-700 shadow-red-100'
+                                  isFire ? 'bg-red-600 hover:bg-red-700 shadow-red-100'
+                                  : isTheft ? 'bg-gradient-to-r from-red-500 to-blue-600 hover:from-red-600 hover:to-blue-700 shadow-purple-100'
                                   : isIntruder ? 'bg-purple-700 hover:bg-purple-800 shadow-purple-100'
                                   : isPano ? 'bg-orange-500 hover:bg-orange-600 shadow-orange-100'
                                   : 'bg-slate-800 hover:bg-slate-900 shadow-slate-200' 

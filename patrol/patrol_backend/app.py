@@ -427,12 +427,13 @@ def get_robot_status():
 @app.route('/api/signup', methods=['POST'])
 def signup():
     data = request.json
-    employee_id = data.get('employeeId').strip().lower()        # 대소문자 구분 제거 
+    employee_id_raw = data.get('employeeId')
     password = data.get('password')
 
-    if not employee_id or not password:
+    if not employee_id_raw or not password:
         return jsonify({"error": "데이터가 부족합니다."}), 400
 
+    employee_id = employee_id_raw.strip().lower()
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
@@ -463,6 +464,7 @@ def signup():
         return jsonify({"error": "가입 처리 중 오류가 발생했습니다."}), 500
     finally:
         conn.close()
+
 
 # [API] 로그인 
 @app.route('/api/login', methods=['POST'])
